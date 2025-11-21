@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="AI-powered virtual hair styling with real-time AR preview">
+    <meta name="theme-color" content="#9333ea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Virtual Hair Styler AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background-color: #121212;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none; /* Prevent pull-to-refresh on mobile */
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        #app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+        /* The video and canvas must overlap perfectly */
+        video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror effect */
+        }
+        canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Matches video */
+            transform: scaleX(-1);
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .controls-panel {
+            pointer-events: auto;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            padding: 1.5rem 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+            border-top-left-radius: 28px;
+            border-top-right-radius: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.6), 0 -2px 8px rgba(196, 132, 252, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 0.5rem;
+            padding: 0 0.25rem;
+        }
+        
+        .hair-option-btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            opacity: 0.75;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            padding: 0.5rem;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .hair-option-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(196, 132, 252, 0.1), rgba(139, 92, 246, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .hair-option-btn:hover {
+            opacity: 1;
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .hair-option-btn:hover::before {
+            opacity: 1;
+        }
+        .hair-option-btn.active {
+            border-color: #c084fc;
+            background: rgba(196, 132, 252, 0.15);
+            transform: scale(1.05) translateY(-2px);
+            opacity: 1;
+            box-shadow: 0 4px 16px rgba(196, 132, 252, 0.3), 0 0 0 1px rgba(196, 132, 252, 0.2);
+        }
+        .hair-option-btn.active::before {
+            opacity: 1;
+        }
+        .hair-option-btn:active {
+            transform: scale(0.98);
+        }
+        .hair-option-btn:focus-visible {
+            outline: 2px solid #c084fc;
+            outline-offset: 2px;
+        }
+        
+        .hair-icon-container {
+            width: 3.5rem;
+            height: 3.5rem;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .hair-option-btn.active .hair-icon-container {
+            background: linear-gradient(135deg, rgba(196, 132, 252, 0.2), rgba(139, 92, 246, 0.1));
+            border-color: rgba(196, 132, 252, 0.4);
+            box-shadow: 0 2px 8px rgba(196, 132, 252, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        }
+        
+        .color-preset-btn {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            border: 2.5px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        }
+        .color-preset-btn:hover {
+            transform: scale(1.15);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(196, 132, 252, 0.2);
+        }
+        .color-preset-btn:active {
+            transform: scale(1.05);
+        }
+        .color-preset-btn:focus-visible {
+            outline: 2px solid #c084fc;
+            outline-offset: 3px;
+        }
+        
+        .color-picker-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .color-picker-trigger {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(196, 132, 252, 0.15);
+            border: 1px solid rgba(196, 132, 252, 0.3);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #c084fc;
+        }
+        .color-picker-trigger:hover {
+            background: rgba(196, 132, 252, 0.25);
+            border-color: rgba(196, 132, 252, 0.5);
+            transform: translateY(-1px);
+        }
+        .color-picker-trigger:active {
+            transform: translateY(0);
+        }
+        .color-picker-preview {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 6px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        #colorPicker {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+        }
+        
+        /* Loader Styles */
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: opacity 0.5s ease;
+        }
+        .loader-ring {
+            display: inline-block;
+            position: relative;
+            width: 72px;
+            height: 72px;
+            margin-bottom: 1.5rem;
+        }
+        .loader-ring div {
+            box-sizing: border-box;
+            display: block;
+            position: absolute;
+            width: 58px;
+            height: 58px;
+            margin: 7px;
+            border: 6px solid #c084fc;
+            border-radius: 50%;
+            animation: loader-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            border-color: #c084fc transparent transparent transparent;
+        }
+        .loader-ring div:nth-child(1) { animation-delay: -0.45s; }
+        .loader-ring div:nth-child(2) { animation-delay: -0.3s; }
+        .loader-ring div:nth-child(3) { animation-delay: -0.15s; }
+        @keyframes loader-ring {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Error/Retry State */
+        .error-state {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            text-align: center;
+        }
+        .retry-btn {
+            background: linear-gradient(135deg, #c084fc, #a855f7);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            border: none;
+            box-shadow: 0 4px 12px rgba(196, 132, 252, 0.3);
+        }
+        .retry-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(196, 132, 252, 0.4);
+        }
+        .retry-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Hide scrollbar for horizontal lists */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Header improvements */
+        .header-gradient {
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+        }
+        
+        .camera-btn {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .camera-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: scale(1.05);
+        }
+        .camera-btn:active {
+            transform: scale(0.95);
+        }
+        .camera-btn:focus-visible {
+            outline: 2px solid #c084fc;
+            outline-offset: 2px;
+        }
+        
+        .logo-container {
+            background: linear-gradient(135deg, #9333ea, #7c3aed);
+            box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+        }
+        
+        /* Smooth scrolling for horizontal lists */
+        .scroll-container {
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Better touch targets for mobile */
+        @media (max-width: 640px) {
+            .hair-option-btn {
+                min-width: 72px;
+            }
+            .hair-icon-container {
+                width: 3.75rem;
+                height: 3.75rem;
+            }
+            .color-preset-btn {
+                width: 2.75rem;
+                height: 2.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div id="loader">
+        <div id="loading-content" class="flex flex-col items-center">
+            <div class="loader-ring"><div></div><div></div><div></div><div></div></div>
+            <h2 class="text-xl font-bold tracking-wider text-white mb-1">INITIALIZING AI</h2>
+            <p class="text-gray-400 text-xs mt-2 uppercase tracking-widest font-medium">Loading Face Models...</p>
+        </div>
+        
+        <div id="error-content" class="error-state">
+            <div class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2">Connection Failed</h2>
+            <p id="error-msg" class="text-gray-400 text-sm px-6 max-w-xs">Unable to load AI resources.</p>
+            <button onclick="location.reload()" class="retry-btn mt-6">Retry</button>
+        </div>
+
+        <div id="loading-status" class="text-gray-500 text-xs mt-6 h-4 font-mono text-center px-4"></div>
+    </div>
+
+    <div id="app-container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlay"></canvas>
+        
+        <!-- UI Overlay -->
+        <div class="ui-layer">
+            <!-- Header -->
+            <div class="p-5 pt-7 flex justify-between items-center header-gradient pointer-events-auto">
+                <div class="text-white flex items-center gap-3">
+                    <div class="logo-container w-10 h-10 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-cut text-white text-base"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base leading-tight tracking-tight">HairStyler</h1>
+                        <span class="text-[10px] text-gray-300 uppercase tracking-widest font-medium">AR Preview</span>
+                    </div>
+                </div>
+                <button onclick="capturePhoto()" class="camera-btn group text-white w-11 h-11 rounded-full flex items-center justify-center" aria-label="Capture photo">
+                    <i class="fas fa-camera text-base group-hover:scale-110 transition-transform"></i>
+                </button>
+            </div>
+
+            <!-- Main Controls -->
+            <div class="controls-panel">
+                <!-- Color Palette -->
+                <div class="flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="section-title">Hair Color</span>
+                        <div class="color-picker-wrapper">
+                            <input type="color" id="colorPicker" value="#4B2918">
+                            <button onclick="document.getElementById('colorPicker').click()" class="color-picker-trigger" aria-label="Custom color picker">
+                                <div class="color-picker-preview" id="colorPreview" style="background-color: #4B2918;"></div>
+                                <i class="fas fa-palette text-xs"></i>
+                                <span>Custom</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar scroll-container" id="color-presets">
+                        <!-- Generated by JS -->
+                    </div>
+                </div>
+
+                <!-- Style Selector -->
+                <div class="flex flex-col">
+                    <span class="section-title mb-3">Style</span>
+                    <div class="flex gap-3 overflow-x-auto pb-1 no-scrollbar scroll-container">
+                        <button onclick="setHair('bob')" class="hair-option-btn active flex flex-col items-center min-w-[80px]" aria-label="Bob hairstyle">
+                            <div class="hair-icon-container">👩</div>
+                            <span class="text-[11px] text-gray-300 font-semibold">Bob</span>
+                        </button>
+                        <button onclick="setHair('long')" class="hair-option-btn flex flex-col items-center min-w-[80px]" aria-label="Long hairstyle">
+                            <div class="hair-icon-container">👩‍🦰</div>
+                            <span class="text-[11px] text-gray-300 font-semibold">Long</span>
+                        </button>
+                        <button onclick="setHair('afro')" class="hair-option-btn flex flex-col items-center min-w-[80px]" aria-label="Afro hairstyle">
+                            <div class="hair-icon-container">👩‍🦱</div>
+                            <span class="text-[11px] text-gray-300 font-semibold">Afro</span>
+                        </button>
+                        <button onclick="setHair('spiky')" class="hair-option-btn flex flex-col items-center min-w-[80px]" aria-label="Spiky hairstyle">
+                            <div class="hair-icon-container">💇</div>
+                            <span class="text-[11px] text-gray-300 font-semibold">Spiky</span>
+                        </button>
+                        <button onclick="setHair('bangs')" class="hair-option-btn flex flex-col items-center min-w-[80px]" aria-label="Bangs hairstyle">
+                            <div class="hair-icon-container">👱‍♀️</div>
+                            <span class="text-[11px] text-gray-300 font-semibold">Bangs</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden canvas for snapshots -->
+    <canvas id="snapshotCanvas" style="display:none;"></canvas>
+
+    <script>
+        // --- Configuration & State ---
+        const COLORS = [
+            { hex: '#1a1a1a', name: 'Black' },
+            { hex: '#E8CCA8', name: 'Blonde' },
+            { hex: '#5D2916', name: 'Brown' },
+            { hex: '#8B0000', name: 'Red' },
+            { hex: '#FF69B4', name: 'Pink' },
+            { hex: '#663399', name: 'Purple' },
+            { hex: '#95a5a6', name: 'Grey' },
+            { hex: '#1e3799', name: 'Blue' }
+        ];
+
+        const HAIR_PATHS = {
+            bob: new Path2D("M10,50 Q10,10 50,10 Q90,10 90,50 Q95,80 85,90 Q80,95 75,85 L75,60 Q75,40 50,40 Q25,40 25,60 L25,85 Q20,95 15,90 Q5,80 10,50 Z"),
+            long: new Path2D("M15,40 Q15,5 50,5 Q85,5 85,40 L88,120 Q90,140 70,135 Q60,130 65,100 L65,60 Q65,40 50,40 Q35,40 35,60 L35,100 Q40,130 30,135 Q10,140 12,120 L15,40 Z"),
+            afro: new Path2D("M15,60 Q-10,40 15,15 Q30,-5 50,-5 Q70,-5 85,15 Q110,40 85,60 Q90,80 80,90 Q70,95 65,80 Q65,60 50,60 Q35,60 35,80 Q30,95 20,90 Q10,80 15,60 Z"),
+            spiky: new Path2D("M20,50 L20,40 L15,30 L30,35 L35,15 L45,35 L50,5 L55,35 L65,15 L70,35 L85,30 L80,40 L80,50 Q80,60 70,55 L70,45 Q50,45 30,45 L30,55 Q20,60 20,50 Z"),
+            bangs: new Path2D("M10,50 Q10,5 50,5 Q90,5 90,50 L90,100 Q90,110 80,110 L80,60 Q80,40 50,40 Q20,40 20,60 L20,110 Q10,110 10,100 L10,50 M20,40 Q35,55 50,50 Q65,55 80,40 Q65,30 50,30 Q35,30 20,40 Z")
+        };
+
+        // scale: relative to face width
+        // yOffset: relative to forehead center
+        const HAIR_CONFIG = {
+            bob: { scale: 2.8, yOffset: -0.8 },
+            long: { scale: 2.9, yOffset: -0.8 },
+            afro: { scale: 3.5, yOffset: -1.4 },
+            spiky: { scale: 2.6, yOffset: -1.2 },
+            bangs: { scale: 2.8, yOffset: -0.9 }
+        };
+
+        let state = {
+            isModelLoaded: false,
+            currentStyle: 'bob',
+            currentColor: '#4B2918',
+            stream: null,
+            isVideoReady: false,
+            lastDetection: null,
+            smoothedLandmarks: null,
+            frameCount: 0,
+            detectionInterval: 3, // Detect every 3 frames (20fps instead of 60fps)
+            lastDetectionTime: 0,
+            smoothedData: null, // Store smoothed key points
+            cachedGradients: {}, // Cache gradients per color/style combo
+            cachedFaceWidth: null, // Cache face width calculation
+            hasFace: false, // Track if face is currently detected
+            performanceMetrics: {
+                fps: 0,
+                frameTimes: [],
+                detectionTimes: [],
+                lastFPSUpdate: 0
+            },
+            errorCount: 0,
+            hairAdjustments: {
+                scale: 1.0,
+                xOffset: 0,
+                yOffset: 0,
+                rotation: 0
+            }
+        };
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('overlay');
+        // Optimize canvas context for performance
+        const ctx = canvas.getContext('2d', { 
+            alpha: true,
+            willReadFrequently: false, // Optimize for drawing, not reading
+            desynchronized: true, // Allow async rendering
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+        const loader = document.getElementById('loader');
+        const statusText = document.getElementById('loading-status');
+
+        // --- Initialization ---
+
+        async function init() {
+            renderColorPresets();
+            // Initialize color preview
+            const colorPreview = document.getElementById('colorPreview');
+            if (colorPreview) {
+                colorPreview.style.backgroundColor = state.currentColor;
+            }
+            
+            try {
+                // 1. Start Camera concurrently with scripts loading
+                const cameraPromise = startCamera();
+                
+                // 2. Load Library via Dynamic Script Injection (Retry Logic included)
+                statusText.innerText = "Loading AI Core...";
+                await loadFaceAPIScript();
+
+                // 3. Load Models
+                statusText.innerText = "Downloading Neural Networks...";
+                await loadModels();
+
+                // 4. Wait for camera if it's not ready yet
+                await cameraPromise;
+                
+                // 5. Start Detection Loop
+                state.isModelLoaded = true;
+                loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 500);
+                
+                detectFrame(); // Start the loop
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loading-content').style.display = 'none';
+                document.getElementById('error-content').style.display = 'flex';
+                document.getElementById('error-msg').innerText = error.message;
+                statusText.innerText = "";
+            }
+        }
+
+        // Robust script loader with fallback
+        async function loadFaceAPIScript() {
+            // If already loaded from a previous attempt and fully initialized
+            if (window.faceapi && 
+                window.faceapi.nets && 
+                window.faceapi.nets.tinyFaceDetector && 
+                window.faceapi.nets.faceLandmarks68TinyNet) {
+                console.log("FaceAPI already fully loaded");
+                return;
+            }
+
+            const urls = [
+                'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+                'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js'
+            ];
+
+            for (const url of urls) {
+                try {
+                    await new Promise((resolve, reject) => {
+                        console.log(`Attempting to load ${url}`);
+                        const script = document.createElement('script');
+                        script.src = url;
+                        script.crossOrigin = 'anonymous'; // Re-enabled for CORS correctness
+                        script.onload = () => resolve();
+                        script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+                        document.head.appendChild(script);
+                    });
+                    
+                    // Polling: Wait until the global object AND specific nets are ready
+                    await new Promise((resolve, reject) => {
+                        let attempts = 0;
+                        const interval = setInterval(() => {
+                            attempts++;
+                            
+                            // Check if the library is initialized enough to have BOTH nets we need
+                            // The error "LandmarkNet not found" implies this was resolving too early
+                            const isReady = window.faceapi && 
+                                          window.faceapi.nets && 
+                                          window.faceapi.nets.tinyFaceDetector && 
+                                          window.faceapi.nets.faceLandmarks68TinyNet;
+
+                            if (isReady) {
+                                clearInterval(interval);
+                                resolve();
+                            } else if (attempts > 150) { // 15 seconds timeout per source
+                                clearInterval(interval);
+                                reject(new Error("Script loaded but initialization timed out (nets missing)"));
+                            }
+                        }, 100);
+                    });
+                    
+                    console.log(`Successfully initialized face-api from ${url}`);
+                    return; // Exit function on success
+                } catch (e) {
+                    console.warn(`Attempt failed for ${url}: ${e.message}`);
+                    // Loop continues to next URL
+                }
+            }
+            throw new Error("Failed to load face-api.js from all sources. Check network connection.");
+        }
+
+        async function startCamera() {
+            statusText.innerText = "Accessing Camera...";
+            try {
+                // Optimize camera settings for performance
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640, max: 1280 }, 
+                        height: { ideal: 480, max: 720 },
+                        facingMode: "user",
+                        frameRate: { ideal: 30, max: 30 } // Limit to 30fps for better performance
+                    } 
+                });
+                video.srcObject = stream;
+                state.stream = stream;
+                
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        state.isVideoReady = true;
+                        handleResize();
+                        resolve();
+                    };
+                });
+            } catch (err) {
+                throw new Error("Camera access denied. Please allow camera permission.");
+            }
+        }
+
+        async function loadModels() {
+            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            
+            try {
+                // Verification - simplified because loader guarantees structure now
+                const api = window.faceapi;
+                if (!api) throw new Error("FaceAPI global not found");
+                
+                // Safe access to models
+                const detector = api.nets.tinyFaceDetector;
+                const landmark = api.nets.faceLandmarks68TinyNet;
+
+                // Double check to fail gracefully
+                if (!detector) throw new Error("TinyFaceDetector not found in library");
+                if (!landmark) throw new Error("LandmarkNet not found in library");
+
+                // Load models in parallel for faster initialization
+                statusText.innerText = "Loading face detection model...";
+                const detectorPromise = detector.loadFromUri(MODEL_URL);
+                
+                statusText.innerText = "Loading landmark detection model...";
+                const landmarkPromise = landmark.loadFromUri(MODEL_URL);
+                
+                // Wait for both to complete
+                await Promise.all([detectorPromise, landmarkPromise]);
+                
+                statusText.innerText = "Models loaded successfully!";
+            } catch (e) {
+                console.error("Model loading failed:", e);
+                throw new Error(`Model Error: ${e.message}`);
+            }
+        }
+
+        // --- Detection Loop ---
+
+        // Adaptive quality system - adjusts detection frequency based on performance
+        function updateAdaptiveQuality() {
+            const metrics = state.performanceMetrics;
+            if (metrics.frameTimes.length < 10) return;
+            
+            const avgFrameTime = metrics.frameTimes.reduce((a, b) => a + b, 0) / metrics.frameTimes.length;
+            const avgDetectionTime = metrics.detectionTimes.length > 0 
+                ? metrics.detectionTimes.reduce((a, b) => a + b, 0) / metrics.detectionTimes.length 
+                : 0;
+            
+            // If performance is poor, reduce detection frequency
+            if (avgFrameTime > 33) { // > 30ms per frame = < 30fps
+                state.detectionInterval = Math.min(5, state.detectionInterval + 1);
+            } else if (avgFrameTime < 20 && avgDetectionTime < 50) { // Good performance
+                state.detectionInterval = Math.max(2, state.detectionInterval - 1);
+            }
+            
+            // Keep only last 30 measurements
+            if (metrics.frameTimes.length > 30) {
+                metrics.frameTimes.shift();
+            }
+            if (metrics.detectionTimes.length > 30) {
+                metrics.detectionTimes.shift();
+            }
+        }
+
+        // Calculate FPS
+        function updateFPS() {
+            const now = performance.now();
+            const metrics = state.performanceMetrics;
+            
+            if (metrics.lastFPSUpdate === 0) {
+                metrics.lastFPSUpdate = now;
+                return;
+            }
+            
+            const delta = now - metrics.lastFPSUpdate;
+            if (delta >= 1000) { // Update every second
+                const frameCount = state.frameCount - (metrics.frameCount || 0);
+                metrics.fps = Math.round((frameCount / delta) * 1000);
+                metrics.frameCount = state.frameCount;
+                metrics.lastFPSUpdate = now;
+            }
+        }
+
+        async function detectFrame() {
+            const frameStart = performance.now();
+            // Use requestAnimationFrame for smooth, non-blocking UI
+            requestAnimationFrame(detectFrame);
+
+            if (!state.isModelLoaded || !state.isVideoReady || video.paused || video.ended) return;
+
+            state.frameCount++;
+            
+            // Throttle detection: only detect every N frames
+            const shouldDetect = state.frameCount % state.detectionInterval === 0;
+            
+            // Only clear canvas if we need to redraw
+            let needsRedraw = true;
+            
+            if (shouldDetect) {
+                try {
+                    const detectStart = performance.now();
+                    
+                    // Detect Face with optimized settings
+                    const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ 
+                        inputSize: 224, // Optimized size for speed/accuracy balance
+                        scoreThreshold: 0.5 
+                    })).withFaceLandmarks(true);
+
+                    const detectTime = performance.now() - detectStart;
+                    state.performanceMetrics.detectionTimes.push(detectTime);
+                    state.errorCount = 0; // Reset error count on success
+
+                    if (detection) {
+                        state.hasFace = true;
+                        state.lastDetection = detection;
+                        state.lastDetectionTime = performance.now();
+                        
+                        // Resize to match canvas
+                        const dims = faceapi.matchDimensions(canvas, video, true);
+                        const resizedResult = faceapi.resizeResults(detection, dims);
+                        
+                        // Smooth landmarks
+                        smoothLandmarks(resizedResult.landmarks);
+                    } else {
+                        state.hasFace = false;
+                        // Clear cached face width when face is lost
+                        state.cachedFaceWidth = null;
+                    }
+                } catch (e) {
+                    console.warn("Detection dropped frame", e);
+                    state.hasFace = false;
+                    state.errorCount++;
+                    
+                    // Auto-recovery: if too many errors, increase interval
+                    if (state.errorCount > 5) {
+                        state.detectionInterval = Math.min(6, state.detectionInterval + 1);
+                        state.errorCount = 0;
+                    }
+                }
+            }
+            
+            // Only draw if we have landmarks or need to clear
+            if (state.smoothedLandmarks && state.hasFace) {
+                // Clear only the area we're drawing to (optimization)
+                if (needsRedraw) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+                drawHair(state.smoothedLandmarks);
+            } else if (!state.hasFace && state.smoothedLandmarks) {
+                // Fade out when face is lost
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawHair(state.smoothedLandmarks, 0.3);
+                // Clear smoothed data after fade
+                if (state.frameCount % 30 === 0) {
+                    state.smoothedData = null;
+                    state.smoothedLandmarks = null;
+                }
+            } else {
+                // No face, clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // Performance tracking
+            const frameTime = performance.now() - frameStart;
+            state.performanceMetrics.frameTimes.push(frameTime);
+            updateFPS();
+            
+            // Update adaptive quality every 60 frames
+            if (state.frameCount % 60 === 0) {
+                updateAdaptiveQuality();
+            }
+        }
+
+        // Smooth landmarks to prevent jittery movement
+        function smoothLandmarks(newLandmarks, smoothingFactor = 0.3) {
+            const jaw = newLandmarks.getJawOutline();
+            const leftEyeBrow = newLandmarks.getLeftEyeBrow();
+            const rightEyeBrow = newLandmarks.getRightEyeBrow();
+            
+            // Adaptive smoothing: use less smoothing when face is moving fast
+            let adaptiveSmoothing = smoothingFactor;
+            if (state.smoothedData) {
+                const lastCenterX = (state.smoothedData.leftEyeBrow[4].x + state.smoothedData.rightEyeBrow[0].x) / 2;
+                const newCenterX = (leftEyeBrow[4].x + rightEyeBrow[0].x) / 2;
+                const movement = Math.abs(newCenterX - lastCenterX);
+                // Increase smoothing factor (less smoothing) for fast movement
+                if (movement > 5) {
+                    adaptiveSmoothing = Math.min(0.6, smoothingFactor * 1.5);
+                }
+            }
+            
+            if (!state.smoothedData) {
+                // First detection - store as-is
+                state.smoothedData = {
+                    jaw: jaw.map(p => ({ x: p.x, y: p.y })),
+                    leftEyeBrow: leftEyeBrow.map(p => ({ x: p.x, y: p.y })),
+                    rightEyeBrow: rightEyeBrow.map(p => ({ x: p.x, y: p.y }))
+                };
+                state.smoothedLandmarks = newLandmarks;
+                return;
+            }
+
+            // Interpolate between old and new positions for key points
+            state.smoothedData = {
+                jaw: jaw.map((newPos, i) => {
+                    const oldPos = state.smoothedData.jaw[i];
+                    return {
+                        x: oldPos.x + (newPos.x - oldPos.x) * adaptiveSmoothing,
+                        y: oldPos.y + (newPos.y - oldPos.y) * adaptiveSmoothing
+                    };
+                }),
+                leftEyeBrow: leftEyeBrow.map((newPos, i) => {
+                    const oldPos = state.smoothedData.leftEyeBrow[i];
+                    return {
+                        x: oldPos.x + (newPos.x - oldPos.x) * adaptiveSmoothing,
+                        y: oldPos.y + (newPos.y - oldPos.y) * adaptiveSmoothing
+                    };
+                }),
+                rightEyeBrow: rightEyeBrow.map((newPos, i) => {
+                    const oldPos = state.smoothedData.rightEyeBrow[i];
+                    return {
+                        x: oldPos.x + (newPos.x - oldPos.x) * adaptiveSmoothing,
+                        y: oldPos.y + (newPos.y - oldPos.y) * adaptiveSmoothing
+                    };
+                })
+            };
+            
+            // Keep reference to latest landmarks for other methods
+            state.smoothedLandmarks = newLandmarks;
+        }
+
+        // Cache gradient calculations
+        function getCachedGradient(color, style) {
+            const cacheKey = `${color}-${style}`;
+            if (state.cachedGradients[cacheKey]) {
+                return state.cachedGradients[cacheKey];
+            }
+            
+            // Convert hex color to RGB for realistic shading
+            const hex = color.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            
+            // Create gradient for realistic hair depth
+            const gradient = {
+                main: ctx.createLinearGradient(-50, -50, 50, 50),
+                highlight: ctx.createLinearGradient(-30, -40, 30, 20),
+                colors: {
+                    light: { r: Math.min(255, r + 30), g: Math.min(255, g + 30), b: Math.min(255, b + 30) },
+                    dark: { r: Math.max(0, r - 40), g: Math.max(0, g - 40), b: Math.max(0, b - 40) },
+                    base: { r, g, b }
+                }
+            };
+            
+            gradient.main.addColorStop(0, `rgb(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b})`);
+            gradient.main.addColorStop(0.5, color);
+            gradient.main.addColorStop(1, `rgb(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b})`);
+            
+            gradient.highlight.addColorStop(0, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.4)`);
+            gradient.highlight.addColorStop(0.5, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.1)`);
+            gradient.highlight.addColorStop(1, 'transparent');
+            
+            state.cachedGradients[cacheKey] = gradient;
+            return gradient;
+        }
+
+        // Create hair texture pattern for more realism
+        function createHairTexture(ctx, colors) {
+            // Create a small pattern canvas for texture
+            const patternCanvas = document.createElement('canvas');
+            patternCanvas.width = 20;
+            patternCanvas.height = 20;
+            const patternCtx = patternCanvas.getContext('2d');
+            
+            // Create subtle noise pattern
+            const imageData = patternCtx.createImageData(20, 20);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const noise = (Math.random() - 0.5) * 15; // Subtle variation
+                data[i] = Math.max(0, Math.min(255, colors.base.r + noise));     // R
+                data[i + 1] = Math.max(0, Math.min(255, colors.base.g + noise)); // G
+                data[i + 2] = Math.max(0, Math.min(255, colors.base.b + noise)); // B
+                data[i + 3] = 30; // Low opacity for subtle effect
+            }
+            
+            patternCtx.putImageData(imageData, 0, 0);
+            return ctx.createPattern(patternCanvas, 'repeat');
+        }
+
+        function drawHair(landmarks, opacity = 1.0) {
+            // Use smoothed data if available, otherwise use raw landmarks
+            const jaw = state.smoothedData ? state.smoothedData.jaw : landmarks.getJawOutline();
+            const leftEyeBrow = state.smoothedData ? state.smoothedData.leftEyeBrow : landmarks.getLeftEyeBrow();
+            const rightEyeBrow = state.smoothedData ? state.smoothedData.rightEyeBrow : landmarks.getRightEyeBrow();
+            
+            // Get additional landmarks for better positioning
+            let nose, leftEye, rightEye;
+            try {
+                nose = landmarks.getNose();
+                leftEye = landmarks.getLeftEye();
+                rightEye = landmarks.getRightEye();
+            } catch (e) {
+                // Fallback if methods not available
+                nose = [];
+                leftEye = [];
+                rightEye = [];
+            }
+
+            // Cache face width calculation
+            if (!state.cachedFaceWidth || state.frameCount % 10 === 0) {
+                const dx = jaw[16].x - jaw[0].x;
+                const dy = jaw[16].y - jaw[0].y;
+                state.cachedFaceWidth = Math.sqrt(dx * dx + dy * dy);
+            }
+            const faceWidth = state.cachedFaceWidth;
+
+            // Improved forehead center calculation using multiple reference points
+            const eyebrowCenterX = (leftEyeBrow[4].x + rightEyeBrow[0].x) / 2;
+            const eyebrowCenterY = (leftEyeBrow[4].y + rightEyeBrow[0].y) / 2;
+            
+            // Use nose tip as additional reference for better vertical positioning
+            const noseY = nose.length > 0 ? nose[3].y : eyebrowCenterY;
+            const foreheadY = Math.min(eyebrowCenterY, noseY - faceWidth * 0.15);
+            
+            // Calculate head rotation from multiple points for better alignment
+            const eyeCenterX = leftEye.length > 0 && rightEye.length > 0
+                ? ((leftEye[0].x + leftEye[3].x) / 2 + (rightEye[0].x + rightEye[3].x) / 2) / 2
+                : eyebrowCenterX;
+            
+            const centerX = eyebrowCenterX + (state.hairAdjustments.xOffset * faceWidth / 100);
+            const centerY = foreheadY + (state.hairAdjustments.yOffset * faceWidth / 100);
+
+            // Style Config with user adjustments
+            const config = HAIR_CONFIG[state.currentStyle];
+            const scaleFactor = (faceWidth / 100) * config.scale * state.hairAdjustments.scale;
+
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            
+            // Translate to forehead center
+            ctx.translate(centerX, centerY);
+            
+            // Rotate to match head tilt (calculated from eye angle) + user adjustment
+            const baseAngle = Math.atan2(rightEyeBrow[4].y - leftEyeBrow[0].y, rightEyeBrow[4].x - leftEyeBrow[0].x);
+            const angle = baseAngle + (state.hairAdjustments.rotation * Math.PI / 180);
+            ctx.rotate(angle);
+
+            ctx.scale(scaleFactor, scaleFactor);
+            
+            // Center the SVG path (0-100 coords) and apply vertical offset
+            ctx.translate(-50, config.yOffset * 50);
+
+            // Get cached gradient
+            const gradient = getCachedGradient(state.currentColor, state.currentStyle);
+            
+            // Calculate lighting based on face orientation (head tilt)
+            const headTilt = Math.abs(angle) * 180 / Math.PI;
+            const lightingIntensity = Math.max(0.3, 1 - (headTilt / 90)); // Dimmer when head is tilted
+            
+            // Draw shadow first (behind hair) - optimized with dynamic intensity
+            ctx.save();
+            ctx.translate(2, 4);
+            ctx.shadowColor = `rgba(0,0,0,${0.8 * lightingIntensity})`;
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetY = 8;
+            ctx.fillStyle = `rgba(0,0,0,${0.3 * lightingIntensity})`;
+            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.restore();
+            
+            // Main hair fill with cached gradient and dynamic lighting
+            ctx.fillStyle = gradient.main;
+            ctx.shadowColor = `rgba(0,0,0,${0.5 * lightingIntensity})`;
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetY = 4;
+            ctx.fill(HAIR_PATHS[state.currentStyle]);
+
+            // Add texture/noise pattern for realism
+            ctx.save();
+            ctx.globalCompositeOperation = 'overlay';
+            const texturePattern = createHairTexture(ctx, gradient.colors);
+            ctx.fillStyle = texturePattern;
+            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.restore();
+
+            // Highlights for realistic shine
+            ctx.save();
+            ctx.fillStyle = gradient.highlight;
+            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.restore();
+
+            // Subtle edge definition
+            ctx.strokeStyle = `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.3)`;
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.stroke(HAIR_PATHS[state.currentStyle]);
+
+            ctx.restore();
+        }
+
+        // --- UI Logic ---
+
+        function renderColorPresets() {
+            const container = document.getElementById('color-presets');
+            COLORS.forEach(color => {
+                const btn = document.createElement('button');
+                btn.className = "color-preset-btn flex-shrink-0";
+                btn.style.backgroundColor = color.hex;
+                btn.setAttribute('aria-label', `${color.name} hair color`);
+                btn.onclick = () => setColor(color.hex);
+                container.appendChild(btn);
+            });
+        }
+
+        window.setHair = (style) => {
+            state.currentStyle = style;
+            document.querySelectorAll('.hair-option-btn').forEach(btn => btn.classList.remove('active'));
+            // Find the button that was clicked
+            const buttons = document.querySelectorAll('.hair-option-btn');
+            buttons.forEach(btn => {
+                const onclickAttr = btn.getAttribute('onclick');
+                if (onclickAttr && onclickAttr.includes(`'${style}'`)) {
+                    btn.classList.add('active');
+                }
+            });
+            // Clear gradient cache when style changes
+            state.cachedGradients = {};
+        }
+
+        window.setColor = (color) => {
+            state.currentColor = color;
+            const colorPicker = document.getElementById('colorPicker');
+            const colorPreview = document.getElementById('colorPreview');
+            if (colorPicker) colorPicker.value = color;
+            if (colorPreview) colorPreview.style.backgroundColor = color;
+            // Clear gradient cache when color changes
+            state.cachedGradients = {};
+        }
+
+        // Hair adjustment functions (can be exposed via UI controls)
+        window.adjustHair = {
+            scale: (value) => {
+                state.hairAdjustments.scale = Math.max(0.5, Math.min(2.0, value));
+            },
+            xOffset: (value) => {
+                state.hairAdjustments.xOffset = Math.max(-20, Math.min(20, value));
+            },
+            yOffset: (value) => {
+                state.hairAdjustments.yOffset = Math.max(-20, Math.min(20, value));
+            },
+            rotation: (value) => {
+                state.hairAdjustments.rotation = Math.max(-15, Math.min(15, value));
+            },
+            reset: () => {
+                state.hairAdjustments = { scale: 1.0, xOffset: 0, yOffset: 0, rotation: 0 };
+            }
+        };
+
+        // Performance monitoring (can be toggled via console)
+        window.getPerformanceStats = () => {
+            const metrics = state.performanceMetrics;
+            return {
+                fps: metrics.fps,
+                avgFrameTime: metrics.frameTimes.length > 0 
+                    ? (metrics.frameTimes.reduce((a, b) => a + b, 0) / metrics.frameTimes.length).toFixed(2) + 'ms'
+                    : 'N/A',
+                avgDetectionTime: metrics.detectionTimes.length > 0
+                    ? (metrics.detectionTimes.reduce((a, b) => a + b, 0) / metrics.detectionTimes.length).toFixed(2) + 'ms'
+                    : 'N/A',
+                detectionInterval: state.detectionInterval,
+                hasFace: state.hasFace
+            };
+        };
+
+        const colorPicker = document.getElementById('colorPicker');
+        if (colorPicker) {
+            colorPicker.addEventListener('input', (e) => {
+                state.currentColor = e.target.value;
+                const colorPreview = document.getElementById('colorPreview');
+                if (colorPreview) colorPreview.style.backgroundColor = e.target.value;
+            });
+        }
+
+        window.capturePhoto = () => {
+            // Flash animation
+            const flash = document.createElement('div');
+            flash.className = 'fixed inset-0 bg-white z-[200] pointer-events-none transition-opacity duration-500';
+            document.body.appendChild(flash);
+            
+            // Actual capture
+            const snapCanvas = document.getElementById('snapshotCanvas');
+            snapCanvas.width = video.videoWidth;
+            snapCanvas.height = video.videoHeight;
+            const snapCtx = snapCanvas.getContext('2d');
+
+            // Flip because video is mirrored
+            snapCtx.translate(snapCanvas.width, 0);
+            snapCtx.scale(-1, 1);
+            snapCtx.drawImage(video, 0, 0);
+            
+            // Draw existing overlay canvas on top
+            // Note: Overlay canvas is already visually mirrored by CSS, but its internal data matches the mirrored video data logic
+            snapCtx.drawImage(canvas, 0, 0, snapCanvas.width, snapCanvas.height);
+
+            // Download
+            const link = document.createElement('a');
+            link.download = `hair-styler-${Date.now()}.png`;
+            link.href = snapCanvas.toDataURL('image/png');
+            link.click();
+
+            // Remove flash
+            requestAnimationFrame(() => {
+                flash.style.opacity = '0';
+                setTimeout(() => flash.remove(), 500);
+            });
+        }
+
+        // Debounced resize handler
+        let resizeTimeout;
+        function handleResize() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (video && canvas) {
+                    const displaySize = { width: video.clientWidth, height: video.clientHeight };
+                    // Only resize if dimensions actually changed to avoid flicker
+                    if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
+                        // Use device pixel ratio for crisp rendering on high-DPI displays
+                        const dpr = window.devicePixelRatio || 1;
+                        canvas.width = displaySize.width * dpr;
+                        canvas.height = displaySize.height * dpr;
+                        ctx.scale(dpr, dpr);
+                        canvas.style.width = displaySize.width + 'px';
+                        canvas.style.height = displaySize.height + 'px';
+                        // Clear gradient cache on resize (canvas context may change)
+                        state.cachedGradients = {};
+                    }
+                }
+            }, 150); // Debounce resize events
+        }
+
+        window.addEventListener('resize', handleResize);
+        
+        // Use ResizeObserver for more efficient resize detection
+        if (window.ResizeObserver && video) {
+            const resizeObserver = new ResizeObserver(handleResize);
+            resizeObserver.observe(video);
+        }
+        
+        // Start App
+        window.onload = init;
+
+    </script>
+</body>
+</html>
