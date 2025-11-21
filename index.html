@@ -674,40 +674,18 @@
                                         const landmarks = findLandmarkNet(api);
                                         
                                         // Check if they exist and are not null/undefined
-                                        if (detector !== null && detector !== undefined) {
-                                            // Check for landmarks - try multiple possible names
-                                            let landmarksFound = landmarks;
-                                            if (!landmarksFound) {
-                                                // Try alternative names
-                                                const altNames = [
-                                                    'faceLandmark68TinyNet',
-                                                    'faceLandmarks68Net',
-                                                    'faceLandmark68Net',
-                                                    'faceLandmarks68'
-                                                ];
-                                                for (const altName of altNames) {
-                                                    if (api.nets[altName]) {
-                                                        landmarksFound = api.nets[altName];
-                                                        // Create alias for consistency
-                                                        api.nets.faceLandmarks68TinyNet = landmarksFound;
-                                                        console.log(`Using alternative landmark net: ${altName}`);
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            
-                                            if (landmarksFound !== null && landmarksFound !== undefined) {
-                                                // Additional check: see if they have expected methods
-                                                // In face-api.js, nets are objects that have loadFromUri method
-                                                if (typeof detector.loadFromUri === 'function' || 
-                                                    typeof detector.load === 'function' ||
-                                                    (typeof detector === 'object' && detector !== null)) {
-                                                    console.log(`FaceAPI nets ready after ${attempts} attempts`);
-                                                    statusText.innerText = "AI library ready!";
-                                                    clearInterval(interval);
-                                                    resolve();
-                                                    return;
-                                                }
+                                        if (detector !== null && detector !== undefined && 
+                                            landmarks !== null && landmarks !== undefined) {
+                                            // Additional check: see if they have expected methods
+                                            // In face-api.js, nets are objects that have loadFromUri method
+                                            if (typeof detector.loadFromUri === 'function' || 
+                                                typeof detector.load === 'function' ||
+                                                (typeof detector === 'object' && detector !== null)) {
+                                                console.log(`FaceAPI nets ready after ${attempts} attempts`);
+                                                statusText.innerText = "AI library ready!";
+                                                clearInterval(interval);
+                                                resolve();
+                                                return;
                                             }
                                         }
                                     }
