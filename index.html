@@ -93,15 +93,102 @@
             background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 100%);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            padding: 1.5rem 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+            padding: 0.75rem 1.25rem max(0.75rem, env(safe-area-inset-bottom));
             border-top-left-radius: 28px;
             border-top-right-radius: 28px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 10px;
             box-shadow: 0 -8px 32px rgba(0,0,0,0.6), 0 -2px 8px rgba(196, 132, 252, 0.1);
             border-top: 1px solid rgba(255, 255, 255, 0.08);
             animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            max-height: 40vh;
+            overflow-y: auto;
+            min-height: auto;
+        }
+        
+        .controls-panel.minimized {
+            padding: 0.5rem 1.25rem max(0.5rem, env(safe-area-inset-bottom));
+            max-height: 60px;
+            overflow: hidden;
+        }
+        
+        .panel-minimize-btn {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            width: 40px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: rgba(255, 255, 255, 0.7);
+            z-index: 10;
+        }
+        
+        .panel-minimize-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .panel-minimize-btn i {
+            transition: transform 0.3s ease;
+            font-size: 0.7rem;
+        }
+        
+        .panel-minimize-btn.minimized i {
+            transform: rotate(180deg);
+        }
+        
+        .color-section {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+        
+        .color-section.collapsed {
+            max-height: 0;
+            margin-bottom: 0;
+            opacity: 0;
+        }
+        
+        .color-section.collapsed .color-presets-container {
+            display: none;
+        }
+        
+        .collapse-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        
+        .collapse-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .collapse-btn i {
+            transition: transform 0.3s ease;
+        }
+        
+        .collapse-btn.collapsed i {
+            transform: rotate(180deg);
         }
         
         @keyframes slideUp {
@@ -116,12 +203,12 @@
         }
         
         .section-title {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 700;
             letter-spacing: 0.1em;
             text-transform: uppercase;
             color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
             padding: 0 0.25rem;
         }
         
@@ -432,11 +519,19 @@
             </div>
 
             <!-- Main Controls -->
-            <div class="controls-panel">
+            <div class="controls-panel" id="controlsPanel">
+                <button onclick="toggleControlsPanel()" class="panel-minimize-btn" id="panelMinimizeBtn" aria-label="Minimize controls">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
                 <!-- Color Palette -->
-                <div class="flex flex-col">
-                    <div class="flex justify-between items-center mb-3">
-                        <span class="section-title">Hair Color</span>
+                <div class="color-section flex flex-col collapsed" id="colorSection">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="section-title">Hair Color</span>
+                            <button onclick="toggleColorSection()" class="collapse-btn collapsed" id="collapseBtn" aria-label="Toggle color section">
+                                <i class="fas fa-chevron-up text-xs"></i>
+                            </button>
+                        </div>
                         <div class="color-picker-wrapper">
                             <input type="color" id="colorPicker" value="#4B2918">
                             <button onclick="document.getElementById('colorPicker').click()" class="color-picker-trigger" aria-label="Custom color picker">
@@ -446,14 +541,16 @@
                             </button>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar scroll-container" id="color-presets">
-                        <!-- Generated by JS -->
+                    <div class="color-presets-container">
+                        <div class="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar scroll-container" id="color-presets">
+                            <!-- Generated by JS -->
+                        </div>
                     </div>
                 </div>
 
                 <!-- Style Selector -->
                 <div class="flex flex-col">
-                    <span class="section-title mb-3">Style</span>
+                    <span class="section-title mb-2">Style</span>
                     <div class="flex gap-3 overflow-x-auto pb-1 no-scrollbar scroll-container">
                         <button onclick="setHair('bob')" class="hair-option-btn active flex flex-col items-center min-w-[80px]" aria-label="Bob hairstyle">
                             <div class="hair-icon-container">👩</div>
@@ -497,12 +594,160 @@
             { hex: '#1e3799', name: 'Blue' }
         ];
 
+        // More organic, lifelike hair paths using Bezier curves for natural flow
         const HAIR_PATHS = {
-            bob: new Path2D("M10,50 Q10,10 50,10 Q90,10 90,50 Q95,80 85,90 Q80,95 75,85 L75,60 Q75,40 50,40 Q25,40 25,60 L25,85 Q20,95 15,90 Q5,80 10,50 Z"),
-            long: new Path2D("M15,40 Q15,5 50,5 Q85,5 85,40 L88,120 Q90,140 70,135 Q60,130 65,100 L65,60 Q65,40 50,40 Q35,40 35,60 L35,100 Q40,130 30,135 Q10,140 12,120 L15,40 Z"),
-            afro: new Path2D("M15,60 Q-10,40 15,15 Q30,-5 50,-5 Q70,-5 85,15 Q110,40 85,60 Q90,80 80,90 Q70,95 65,80 Q65,60 50,60 Q35,60 35,80 Q30,95 20,90 Q10,80 15,60 Z"),
-            spiky: new Path2D("M20,50 L20,40 L15,30 L30,35 L35,15 L45,35 L50,5 L55,35 L65,15 L70,35 L85,30 L80,40 L80,50 Q80,60 70,55 L70,45 Q50,45 30,45 L30,55 Q20,60 20,50 Z"),
-            bangs: new Path2D("M10,50 Q10,5 50,5 Q90,5 90,50 L90,100 Q90,110 80,110 L80,60 Q80,40 50,40 Q20,40 20,60 L20,110 Q10,110 10,100 L10,50 M20,40 Q35,55 50,50 Q65,55 80,40 Q65,30 50,30 Q35,30 20,40 Z")
+            bob: function() {
+                const p = new Path2D();
+                // Organic bob shape following head contour
+                p.moveTo(8, 52);
+                p.bezierCurveTo(8, 15, 12, 8, 28, 8);
+                p.bezierCurveTo(45, 8, 55, 12, 62, 15);
+                p.bezierCurveTo(75, 12, 85, 10, 92, 15);
+                p.bezierCurveTo(95, 22, 96, 48, 94, 52);
+                p.bezierCurveTo(96, 65, 94, 78, 88, 85);
+                p.bezierCurveTo(85, 92, 80, 94, 75, 92);
+                p.bezierCurveTo(73, 88, 72, 65, 72, 58);
+                p.bezierCurveTo(72, 42, 68, 38, 62, 38);
+                p.bezierCurveTo(56, 38, 52, 42, 52, 48);
+                p.bezierCurveTo(52, 58, 51, 88, 48, 92);
+                p.bezierCurveTo(43, 94, 38, 92, 35, 85);
+                p.bezierCurveTo(28, 78, 26, 65, 28, 52);
+                p.bezierCurveTo(26, 48, 25, 22, 28, 15);
+                p.bezierCurveTo(35, 10, 45, 12, 52, 15);
+                p.closePath();
+                return p;
+            },
+            long: function() {
+                const p = new Path2D();
+                // Flowing long hair with natural waves
+                p.moveTo(12, 42);
+                p.bezierCurveTo(12, 8, 18, 4, 28, 4);
+                p.bezierCurveTo(38, 4, 45, 6, 50, 8);
+                p.bezierCurveTo(55, 6, 62, 4, 72, 4);
+                p.bezierCurveTo(82, 4, 88, 8, 88, 12);
+                p.bezierCurveTo(90, 18, 91, 42, 91, 48);
+                p.bezierCurveTo(92, 65, 93, 100, 92, 115);
+                p.bezierCurveTo(92, 125, 90, 132, 85, 138);
+                p.bezierCurveTo(80, 142, 75, 143, 70, 141);
+                p.bezierCurveTo(68, 135, 67, 105, 67, 95);
+                p.bezierCurveTo(67, 78, 66, 62, 65, 58);
+                p.bezierCurveTo(65, 42, 60, 38, 55, 38);
+                p.bezierCurveTo(50, 38, 48, 42, 47, 48);
+                p.bezierCurveTo(46, 58, 45, 62, 45, 78);
+                p.bezierCurveTo(45, 95, 44, 105, 42, 135);
+                p.bezierCurveTo(40, 141, 35, 143, 30, 138);
+                p.bezierCurveTo(25, 132, 23, 125, 23, 115);
+                p.bezierCurveTo(22, 100, 23, 65, 24, 48);
+                p.closePath();
+                // Add some flowing strands on the sides
+                const strand1 = new Path2D();
+                strand1.moveTo(88, 55);
+                strand1.bezierCurveTo(90, 75, 92, 95, 91, 110);
+                strand1.bezierCurveTo(89, 118, 87, 122, 84, 120);
+                strand1.bezierCurveTo(86, 115, 86, 75, 88, 55);
+                p.addPath(strand1);
+                
+                const strand2 = new Path2D();
+                strand2.moveTo(12, 55);
+                strand2.bezierCurveTo(10, 75, 8, 95, 9, 110);
+                strand2.bezierCurveTo(11, 118, 13, 122, 16, 120);
+                strand2.bezierCurveTo(14, 115, 14, 75, 12, 55);
+                p.addPath(strand2);
+                return p;
+            },
+            afro: function() {
+                const p = new Path2D();
+                // Voluminous afro with natural curl pattern
+                p.moveTo(12, 62);
+                p.bezierCurveTo(-5, 45, 8, 18, 25, 8);
+                p.bezierCurveTo(35, 2, 42, -2, 50, -3);
+                p.bezierCurveTo(58, -2, 65, 2, 75, 8);
+                p.bezierCurveTo(92, 18, 105, 45, 88, 62);
+                p.bezierCurveTo(95, 75, 92, 85, 85, 88);
+                p.bezierCurveTo(78, 92, 72, 90, 68, 85);
+                p.bezierCurveTo(68, 78, 68, 62, 65, 60);
+                p.bezierCurveTo(62, 58, 58, 60, 55, 62);
+                p.bezierCurveTo(52, 60, 48, 58, 45, 60);
+                p.bezierCurveTo(42, 62, 42, 78, 42, 85);
+                p.bezierCurveTo(38, 90, 32, 92, 25, 88);
+                p.bezierCurveTo(18, 85, 15, 75, 22, 62);
+                p.closePath();
+                // Add curl definition
+                const curl1 = new Path2D();
+                curl1.arc(35, 25, 12, 0, Math.PI * 2);
+                p.addPath(curl1);
+                const curl2 = new Path2D();
+                curl2.arc(65, 25, 12, 0, Math.PI * 2);
+                p.addPath(curl2);
+                const curl3 = new Path2D();
+                curl3.arc(50, 35, 10, 0, Math.PI * 2);
+                p.addPath(curl3);
+                return p;
+            },
+            spiky: function() {
+                const p = new Path2D();
+                // Dynamic spiky hair with natural variation
+                p.moveTo(18, 52);
+                p.bezierCurveTo(18, 45, 18, 38, 20, 32);
+                // Left spikes
+                p.lineTo(16, 28);
+                p.bezierCurveTo(14, 22, 18, 18, 22, 20);
+                p.lineTo(28, 18);
+                p.bezierCurveTo(30, 12, 35, 10, 38, 14);
+                p.lineTo(42, 12);
+                // Center spikes
+                p.bezierCurveTo(45, 8, 50, 6, 52, 10);
+                p.bezierCurveTo(55, 8, 58, 6, 60, 10);
+                p.lineTo(62, 12);
+                // Right spikes
+                p.bezierCurveTo(65, 10, 70, 12, 72, 14);
+                p.lineTo(78, 18);
+                p.bezierCurveTo(82, 18, 86, 22, 84, 28);
+                p.lineTo(80, 32);
+                p.bezierCurveTo(82, 38, 82, 45, 82, 52);
+                p.bezierCurveTo(82, 58, 80, 62, 78, 64);
+                p.bezierCurveTo(75, 66, 72, 65, 70, 62);
+                p.bezierCurveTo(68, 58, 65, 55, 62, 52);
+                p.bezierCurveTo(58, 55, 55, 58, 52, 58);
+                p.bezierCurveTo(48, 58, 45, 55, 42, 52);
+                p.bezierCurveTo(38, 55, 35, 58, 32, 62);
+                p.bezierCurveTo(30, 65, 27, 66, 24, 64);
+                p.bezierCurveTo(22, 62, 20, 58, 18, 52);
+                p.closePath();
+                return p;
+            },
+            bangs: function() {
+                const p = new Path2D();
+                // Natural bangs with forehead coverage
+                p.moveTo(8, 52);
+                p.bezierCurveTo(8, 8, 12, 4, 28, 6);
+                p.bezierCurveTo(35, 5, 42, 8, 48, 10);
+                p.bezierCurveTo(52, 8, 55, 6, 62, 6);
+                p.bezierCurveTo(78, 4, 82, 8, 92, 52);
+                p.bezierCurveTo(93, 58, 92, 95, 91, 100);
+                p.bezierCurveTo(90, 108, 85, 110, 80, 108);
+                p.bezierCurveTo(78, 102, 78, 60, 78, 55);
+                p.bezierCurveTo(78, 42, 72, 38, 68, 38);
+                p.bezierCurveTo(64, 38, 60, 42, 58, 48);
+                p.bezierCurveTo(55, 42, 52, 38, 48, 38);
+                p.bezierCurveTo(44, 38, 40, 42, 38, 48);
+                p.bezierCurveTo(36, 42, 32, 38, 28, 38);
+                p.bezierCurveTo(24, 38, 22, 42, 22, 55);
+                p.bezierCurveTo(22, 60, 22, 102, 20, 108);
+                p.bezierCurveTo(15, 110, 10, 108, 9, 100);
+                p.bezierCurveTo(8, 95, 9, 58, 8, 52);
+                p.closePath();
+                // Forehead bangs section
+                const bangs = new Path2D();
+                bangs.moveTo(18, 42);
+                bangs.bezierCurveTo(25, 50, 35, 52, 45, 50);
+                bangs.bezierCurveTo(55, 52, 65, 50, 82, 42);
+                bangs.bezierCurveTo(65, 38, 55, 35, 45, 35);
+                bangs.bezierCurveTo(35, 35, 25, 38, 18, 42);
+                bangs.closePath();
+                p.addPath(bangs);
+                return p;
+            }
         };
 
         // scale: relative to face width
@@ -1205,51 +1450,194 @@
             const g = parseInt(hex.substring(2, 4), 16);
             const b = parseInt(hex.substring(4, 6), 16);
             
-            // Create gradient for realistic hair depth
+            // Create more realistic gradient for hair depth with multiple layers
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            const isDark = brightness < 128;
+            
+            // More natural color variations based on hair color darkness
+            const lightBoost = isDark ? 45 : 35;
+            const darkBoost = isDark ? 50 : 35;
+            
             const gradient = {
-                main: ctx.createLinearGradient(-50, -50, 50, 50),
-                highlight: ctx.createLinearGradient(-30, -40, 30, 20),
+                main: ctx.createRadialGradient(-30, -30, 0, -30, -30, 80),
+                highlight: ctx.createLinearGradient(-40, -50, 40, 30),
+                midtone: ctx.createLinearGradient(-50, -50, 50, 50),
                 colors: {
-                    light: { r: Math.min(255, r + 30), g: Math.min(255, g + 30), b: Math.min(255, b + 30) },
-                    dark: { r: Math.max(0, r - 40), g: Math.max(0, g - 40), b: Math.max(0, b - 40) },
+                    light: { 
+                        r: Math.min(255, r + lightBoost), 
+                        g: Math.min(255, g + lightBoost), 
+                        b: Math.min(255, b + lightBoost) 
+                    },
+                    dark: { 
+                        r: Math.max(0, r - darkBoost), 
+                        g: Math.max(0, g - darkBoost), 
+                        b: Math.max(0, b - darkBoost) 
+                    },
+                    mid: {
+                        r: Math.min(255, r + 15),
+                        g: Math.min(255, g + 15),
+                        b: Math.min(255, b + 15)
+                    },
                     base: { r, g, b }
                 }
             };
             
-            gradient.main.addColorStop(0, `rgb(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b})`);
-            gradient.main.addColorStop(0.5, color);
-            gradient.main.addColorStop(1, `rgb(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b})`);
+            // Main gradient - radial for more natural lighting
+            gradient.main.addColorStop(0, `rgb(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b})`);
+            gradient.main.addColorStop(0.3, color);
+            gradient.main.addColorStop(0.7, `rgb(${gradient.colors.mid.r}, ${gradient.colors.mid.g}, ${gradient.colors.mid.b})`);
+            gradient.main.addColorStop(1, `rgb(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b})`);
             
-            gradient.highlight.addColorStop(0, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.4)`);
-            gradient.highlight.addColorStop(0.5, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.1)`);
+            // Midtone gradient for depth
+            gradient.midtone.addColorStop(0, `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.6)`);
+            gradient.midtone.addColorStop(0.5, color);
+            gradient.midtone.addColorStop(1, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.4)`);
+            
+            // Highlight gradient - more subtle and realistic
+            gradient.highlight.addColorStop(0, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.3)`);
+            gradient.highlight.addColorStop(0.3, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.15)`);
+            gradient.highlight.addColorStop(0.7, 'transparent');
             gradient.highlight.addColorStop(1, 'transparent');
             
             state.cachedGradients[cacheKey] = gradient;
             return gradient;
         }
 
-        // Create hair texture pattern for more realism
+        // Create hair texture pattern for more realism with strand-like effect
         function createHairTexture(ctx, colors) {
-            // Create a small pattern canvas for texture
+            // Create a larger pattern canvas for better texture detail
             const patternCanvas = document.createElement('canvas');
-            patternCanvas.width = 20;
-            patternCanvas.height = 20;
+            patternCanvas.width = 60;
+            patternCanvas.height = 60;
             const patternCtx = patternCanvas.getContext('2d');
             
-            // Create subtle noise pattern
-            const imageData = patternCtx.createImageData(20, 20);
+            // Create more realistic hair strand pattern with multiple layers
+            const imageData = patternCtx.createImageData(60, 60);
             const data = imageData.data;
             
-            for (let i = 0; i < data.length; i += 4) {
-                const noise = (Math.random() - 0.5) * 15; // Subtle variation
-                data[i] = Math.max(0, Math.min(255, colors.base.r + noise));     // R
-                data[i + 1] = Math.max(0, Math.min(255, colors.base.g + noise)); // G
-                data[i + 2] = Math.max(0, Math.min(255, colors.base.b + noise)); // B
-                data[i + 3] = 30; // Low opacity for subtle effect
+            // Seed random for consistent pattern (but still varied)
+            const strandGroups = 6;
+            const strandPositions = [];
+            for (let i = 0; i < strandGroups; i++) {
+                strandPositions.push({
+                    x: (i * 10) + 5 + (Math.random() * 4 - 2),
+                    width: 2 + Math.random() * 2,
+                    variation: Math.random() * 0.3
+                });
+            }
+            
+            for (let y = 0; y < 60; y++) {
+                for (let x = 0; x < 60; x++) {
+                    const idx = (y * 60 + x) * 4;
+                    
+                    // Check if pixel is on a strand
+                    let onStrand = false;
+                    let strandVariation = 0;
+                    
+                    for (const strand of strandPositions) {
+                        const dist = Math.abs(x - (strand.x + Math.sin(y * 0.15 + strand.variation) * 3));
+                        if (dist < strand.width) {
+                            onStrand = true;
+                            strandVariation = (strand.width - dist) / strand.width;
+                            break;
+                        }
+                    }
+                    
+                    // Base noise for all pixels
+                    const baseNoise = (Math.random() - 0.5) * 15;
+                    
+                    // Strand enhancement
+                    const strandBoost = onStrand ? (strandVariation * 12) : 0;
+                    
+                    // Vertical flow variation
+                    const flowVariation = Math.sin(y * 0.12) * 3;
+                    
+                    // Combined variation
+                    const variation = baseNoise + strandBoost + flowVariation;
+                    
+                    data[idx] = Math.max(0, Math.min(255, colors.base.r + variation));     // R
+                    data[idx + 1] = Math.max(0, Math.min(255, colors.base.g + variation)); // G
+                    data[idx + 2] = Math.max(0, Math.min(255, colors.base.b + variation)); // B
+                    data[idx + 3] = 45; // More visible for better texture
+                }
             }
             
             patternCtx.putImageData(imageData, 0, 0);
             return ctx.createPattern(patternCanvas, 'repeat');
+        }
+        
+        // Create hair strand overlay for more realistic appearance
+        function drawHairStrands(ctx, path, colors, count = 15) {
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Draw individual hair strands with natural variation
+            for (let i = 0; i < count; i++) {
+                const offset = (i - count / 2) * (60 / count) + (Math.random() * 8 - 4);
+                const startX = -35 + offset;
+                const startY = -30 + (Math.random() * 10 - 5);
+                
+                // Vary strand thickness and opacity for realism
+                const thickness = 0.6 + Math.random() * 0.8;
+                const opacity = 0.08 + Math.random() * 0.12;
+                const colorVariation = (Math.random() - 0.5) * 20;
+                
+                ctx.strokeStyle = `rgba(${
+                    Math.max(0, Math.min(255, colors.base.r + colorVariation))
+                }, ${
+                    Math.max(0, Math.min(255, colors.base.g + colorVariation))
+                }, ${
+                    Math.max(0, Math.min(255, colors.base.b + colorVariation))
+                }, ${opacity})`;
+                
+                ctx.lineWidth = thickness;
+                ctx.globalAlpha = 0.8 + Math.random() * 0.2;
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                
+                // Create natural flowing curve with multiple control points
+                const midX1 = startX + (Math.random() * 15 - 7.5);
+                const midY1 = startY + 15 + (Math.random() * 8 - 4);
+                const midX2 = midX1 + (Math.random() * 15 - 7.5);
+                const midY2 = midY1 + 15 + (Math.random() * 8 - 4);
+                const endX = midX2 + (Math.random() * 10 - 5);
+                const endY = midY2 + 15 + (Math.random() * 10 - 5);
+                
+                // Use bezier curves for smooth, natural hair flow
+                ctx.bezierCurveTo(
+                    midX1, midY1,
+                    midX2, midY2,
+                    endX, endY
+                );
+                
+                ctx.stroke();
+            }
+            
+            // Add some finer detail strands
+            ctx.lineWidth = 0.4;
+            for (let i = 0; i < count * 0.6; i++) {
+                const offset = (i - count / 2) * (65 / count) + (Math.random() * 10 - 5);
+                const startX = -38 + offset;
+                const startY = -28 + (Math.random() * 12 - 6);
+                
+                ctx.strokeStyle = `rgba(${colors.base.r}, ${colors.base.g}, ${colors.base.b}, ${0.05 + Math.random() * 0.06})`;
+                ctx.globalAlpha = 0.6 + Math.random() * 0.4;
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                const endX = startX + (Math.random() * 20 - 10);
+                const endY = startY + 20 + (Math.random() * 15 - 7.5);
+                ctx.quadraticCurveTo(
+                    startX + (endX - startX) * 0.5 + (Math.random() * 6 - 3),
+                    startY + (endY - startY) * 0.5,
+                    endX, endY
+                );
+                ctx.stroke();
+            }
+            
+            ctx.restore();
         }
 
         function drawHair(landmarks, opacity = 1.0) {
@@ -1285,14 +1673,26 @@
             
             // Use nose tip as additional reference for better vertical positioning
             const noseY = nose.length > 0 ? nose[3].y : eyebrowCenterY;
-            const foreheadY = Math.min(eyebrowCenterY, noseY - faceWidth * 0.15);
+            const noseTipY = nose.length > 6 ? nose[3].y : noseY;
+            
+            // Calculate natural hairline position based on facial proportions
+            // Hairline is typically about 1/3 of face height above eyebrows
+            const chinY = jaw.length > 8 ? jaw[8].y : (jaw.length > 7 ? jaw[7].y : jaw[jaw.length - 1].y);
+            const faceHeightEstimate = Math.abs(chinY - eyebrowCenterY);
+            const naturalHairlineOffset = faceHeightEstimate * 0.35;
+            const foreheadY = Math.min(eyebrowCenterY - naturalHairlineOffset, noseTipY - faceWidth * 0.2);
             
             // Calculate head rotation from multiple points for better alignment
             const eyeCenterX = leftEye.length > 0 && rightEye.length > 0
                 ? ((leftEye[0].x + leftEye[3].x) / 2 + (rightEye[0].x + rightEye[3].x) / 2) / 2
                 : eyebrowCenterX;
             
-            const centerX = eyebrowCenterX + (state.hairAdjustments.xOffset * faceWidth / 100);
+            // Use temple points for better side alignment (if jaw points available)
+            const leftTempleX = jaw[0].x - (jaw[0].x - eyebrowCenterX) * 0.3;
+            const rightTempleX = jaw[16].x + (eyebrowCenterX - jaw[16].x) * 0.3;
+            const adjustedCenterX = (leftTempleX + rightTempleX) / 2;
+            
+            const centerX = adjustedCenterX + (state.hairAdjustments.xOffset * faceWidth / 100);
             const centerY = foreheadY + (state.hairAdjustments.yOffset * faceWidth / 100);
 
             // Style Config with user adjustments
@@ -1305,8 +1705,31 @@
             // Translate to forehead center
             ctx.translate(centerX, centerY);
             
-            // Rotate to match head tilt (calculated from eye angle) + user adjustment
-            const baseAngle = Math.atan2(rightEyeBrow[4].y - leftEyeBrow[0].y, rightEyeBrow[4].x - leftEyeBrow[0].x);
+            // Rotate to match head tilt (calculated from multiple reference points for accuracy)
+            // Use eyebrow angle as primary reference
+            const eyebrowAngle = Math.atan2(rightEyeBrow[4].y - leftEyeBrow[0].y, rightEyeBrow[4].x - leftEyeBrow[0].x);
+            
+            // Also use eye center angle for more accuracy
+            let eyeAngle = eyebrowAngle;
+            if (leftEye.length > 0 && rightEye.length > 0) {
+                const leftEyeCenter = {
+                    x: (leftEye[0].x + leftEye[3].x) / 2,
+                    y: (leftEye[0].y + leftEye[3].y) / 2
+                };
+                const rightEyeCenter = {
+                    x: (rightEye[0].x + rightEye[3].x) / 2,
+                    y: (rightEye[0].y + rightEye[3].y) / 2
+                };
+                const calculatedEyeAngle = Math.atan2(rightEyeCenter.y - leftEyeCenter.y, rightEyeCenter.x - leftEyeCenter.x);
+                // Average the angles for smoother result
+                eyeAngle = (eyebrowAngle + calculatedEyeAngle) / 2;
+            }
+            
+            // Use jaw line angle for additional reference
+            const jawAngle = Math.atan2(jaw[16].y - jaw[0].y, jaw[16].x - jaw[0].x);
+            
+            // Weighted average: eyebrows and eyes are most reliable for hair positioning
+            const baseAngle = (eyeAngle * 0.7) + (jawAngle * 0.3);
             const angle = baseAngle + (state.hairAdjustments.rotation * Math.PI / 180);
             ctx.rotate(angle);
 
@@ -1318,47 +1741,157 @@
             // Get cached gradient
             const gradient = getCachedGradient(state.currentColor, state.currentStyle);
             
-            // Calculate lighting based on face orientation (head tilt)
+            // Calculate lighting based on face orientation (head tilt and rotation)
+            // More sophisticated lighting that accounts for 3D head position
             const headTilt = Math.abs(angle) * 180 / Math.PI;
-            const lightingIntensity = Math.max(0.3, 1 - (headTilt / 90)); // Dimmer when head is tilted
+            const headRotation = Math.abs(baseAngle) * 180 / Math.PI;
             
-            // Draw shadow first (behind hair) - optimized with dynamic intensity
+            // Calculate lighting intensity based on head orientation
+            // Light comes from top-front, so face forward = brightest
+            const tiltFactor = Math.max(0.3, 1 - (headTilt / 90));
+            const rotationFactor = Math.max(0.4, 1 - (headRotation / 120));
+            
+            // Combine factors with slight bias toward tilt
+            const lightingIntensity = (tiltFactor * 0.6) + (rotationFactor * 0.4);
+            
+            // Also calculate highlight position based on head angle
+            const highlightOffsetX = Math.sin(angle) * 15;
+            const highlightOffsetY = Math.cos(angle) * 10;
+            
+            // Get the hair path (now a function)
+            const hairPath = typeof HAIR_PATHS[state.currentStyle] === 'function' 
+                ? HAIR_PATHS[state.currentStyle]() 
+                : HAIR_PATHS[state.currentStyle];
+            
+            // Draw shadow first (behind hair) - more realistic shadow with soft edges
             ctx.save();
-            ctx.translate(2, 4);
-            ctx.shadowColor = `rgba(0,0,0,${0.8 * lightingIntensity})`;
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 8;
-            ctx.fillStyle = `rgba(0,0,0,${0.3 * lightingIntensity})`;
-            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.translate(2, 5);
+            ctx.shadowColor = `rgba(0,0,0,${0.9 * lightingIntensity})`;
+            ctx.shadowBlur = 28;
+            ctx.shadowOffsetY = 12;
+            ctx.shadowOffsetX = 1;
+            ctx.fillStyle = `rgba(0,0,0,${0.5 * lightingIntensity})`;
+            ctx.fill(hairPath);
             ctx.restore();
             
-            // Main hair fill with cached gradient and dynamic lighting
+            // Base shadow layer for depth
+            ctx.save();
+            ctx.translate(1, 3);
+            ctx.fillStyle = `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, ${0.6 * lightingIntensity})`;
+            ctx.fill(hairPath);
+            ctx.restore();
+            
+            // Base midtone layer for depth and volume
+            ctx.save();
+            ctx.fillStyle = gradient.midtone;
+            ctx.shadowColor = `rgba(0,0,0,${0.3 * lightingIntensity})`;
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 3;
+            ctx.fill(hairPath);
+            ctx.restore();
+            
+            // Main hair fill with radial gradient for natural lighting
+            ctx.save();
             ctx.fillStyle = gradient.main;
-            ctx.shadowColor = `rgba(0,0,0,${0.5 * lightingIntensity})`;
+            ctx.shadowColor = `rgba(0,0,0,${0.3 * lightingIntensity})`;
             ctx.shadowBlur = 12;
             ctx.shadowOffsetY = 4;
-            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.fill(hairPath);
+            ctx.restore();
 
-            // Add texture/noise pattern for realism
+            // Add detailed texture/noise pattern for strand realism
             ctx.save();
-            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = 0.7;
             const texturePattern = createHairTexture(ctx, gradient.colors);
             ctx.fillStyle = texturePattern;
-            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.fill(hairPath);
             ctx.restore();
-
-            // Highlights for realistic shine
+            
+            // Add individual hair strands for more realism
+            drawHairStrands(ctx, hairPath, gradient.colors, 15);
+            
+            // Add finer detail strands
             ctx.save();
-            ctx.fillStyle = gradient.highlight;
-            ctx.fill(HAIR_PATHS[state.currentStyle]);
+            ctx.strokeStyle = `rgba(${gradient.colors.base.r}, ${gradient.colors.base.g}, ${gradient.colors.base.b}, 0.12)`;
+            ctx.lineWidth = 0.8;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 20; i++) {
+                ctx.globalAlpha = 0.05 + (Math.random() * 0.08);
+                ctx.beginPath();
+                const x1 = -35 + (Math.random() * 70);
+                const y1 = -25 + (Math.random() * 50);
+                const x2 = x1 + (Math.random() * 20 - 10);
+                const y2 = y1 + 15 + (Math.random() * 20);
+                ctx.moveTo(x1, y1);
+                ctx.quadraticCurveTo((x1 + x2) / 2 + (Math.random() * 6 - 3), (y1 + y2) / 2, x2, y2);
+                ctx.stroke();
+            }
             ctx.restore();
 
-            // Subtle edge definition
-            ctx.strokeStyle = `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.3)`;
-            ctx.lineWidth = 1.5;
+            // Highlights for realistic shine - more natural placement
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = gradient.highlight;
+            ctx.fill(hairPath);
+            ctx.restore();
+            
+            // Additional highlight for shine effect with natural falloff - dynamic based on head position
+            ctx.save();
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = 0.25 * lightingIntensity;
+            const shineGradient = ctx.createLinearGradient(
+                -45 + highlightOffsetX, -55 + highlightOffsetY, 
+                45 + highlightOffsetX, 25 + highlightOffsetY
+            );
+            shineGradient.addColorStop(0, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.6)`);
+            shineGradient.addColorStop(0.3, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.3)`);
+            shineGradient.addColorStop(0.6, 'transparent');
+            shineGradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = shineGradient;
+            ctx.fill(hairPath);
+            ctx.restore();
+            
+            // Soft volumetric highlights - position based on head orientation
+            ctx.save();
+            ctx.globalCompositeOperation = 'soft-light';
+            ctx.globalAlpha = 0.2 * lightingIntensity;
+            const volumeGradient = ctx.createRadialGradient(
+                -25 + highlightOffsetX, -35 + highlightOffsetY, 5, 
+                -25 + highlightOffsetX, -35 + highlightOffsetY, 60
+            );
+            volumeGradient.addColorStop(0, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.4)`);
+            volumeGradient.addColorStop(0.5, `rgba(${gradient.colors.light.r}, ${gradient.colors.light.g}, ${gradient.colors.light.b}, 0.1)`);
+            volumeGradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = volumeGradient;
+            ctx.fill(hairPath);
+            ctx.restore();
+
+            // Natural edge definition with gradient - softer, more organic
+            ctx.save();
+            const edgeGradient = ctx.createLinearGradient(-55, -55, 55, 55);
+            edgeGradient.addColorStop(0, `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.35)`);
+            edgeGradient.addColorStop(0.3, `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.25)`);
+            edgeGradient.addColorStop(0.5, `rgba(${gradient.colors.base.r}, ${gradient.colors.base.g}, ${gradient.colors.base.b}, 0.15)`);
+            edgeGradient.addColorStop(0.7, `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.25)`);
+            edgeGradient.addColorStop(1, `rgba(${gradient.colors.dark.r}, ${gradient.colors.dark.g}, ${gradient.colors.dark.b}, 0.3)`);
+            ctx.strokeStyle = edgeGradient;
+            ctx.lineWidth = 1.8;
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
-            ctx.stroke(HAIR_PATHS[state.currentStyle]);
+            ctx.shadowColor = `rgba(0,0,0,${0.4 * lightingIntensity})`;
+            ctx.shadowBlur = 4;
+            ctx.stroke(hairPath);
+            ctx.restore();
+            
+            // Subtle inner edge for depth
+            ctx.save();
+            ctx.strokeStyle = `rgba(${gradient.colors.base.r}, ${gradient.colors.base.g}, ${gradient.colors.base.b}, 0.1)`;
+            ctx.lineWidth = 1.2;
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.stroke(hairPath);
+            ctx.restore();
 
             ctx.restore();
         }
@@ -1405,6 +1938,24 @@
             if (colorPreview) colorPreview.style.backgroundColor = color;
             // Clear gradient cache when color changes
             state.cachedGradients = {};
+        }
+        
+        window.toggleColorSection = () => {
+            const section = document.getElementById('colorSection');
+            const btn = document.getElementById('collapseBtn');
+            if (section && btn) {
+                section.classList.toggle('collapsed');
+                btn.classList.toggle('collapsed');
+            }
+        }
+        
+        window.toggleControlsPanel = () => {
+            const panel = document.getElementById('controlsPanel');
+            const btn = document.getElementById('panelMinimizeBtn');
+            if (panel && btn) {
+                panel.classList.toggle('minimized');
+                btn.classList.toggle('minimized');
+            }
         }
 
         // Hair adjustment functions (can be exposed via UI controls)
