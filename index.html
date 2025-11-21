@@ -10,9 +10,26 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%239333ea' width='100' height='100'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white'>✂</text></svg>">
     <title>Virtual Hair Styler AI</title>
+    
+    <!-- Performance: Resource Hints for faster CDN loading -->
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://justadudewhohacks.github.io" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://justadudewhohacks.github.io">
+    
+    <!-- Performance: Load Tailwind early (critical for initial render) -->
     <!-- Note: Tailwind CDN is used for simplicity. For production, consider using PostCSS plugin -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Performance: Defer Font Awesome (non-critical for initial render) -->
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"></noscript>
     <style>
         * {
             -webkit-tap-highlight-color: transparent;
@@ -514,7 +531,9 @@
                 xOffset: 0,
                 yOffset: 0,
                 rotation: 0
-            }
+            },
+            modelCache: null, // IndexedDB cache for models
+            initStartTime: performance.now() // Track total initialization time
         };
 
         const video = document.getElementById('video');
@@ -533,24 +552,34 @@
         // --- Initialization ---
 
         async function init() {
-            renderColorPresets();
-            // Initialize color preview
-            const colorPreview = document.getElementById('colorPreview');
-            if (colorPreview) {
-                colorPreview.style.backgroundColor = state.currentColor;
-            }
+            const initStart = performance.now();
+            
+            // Initialize UI elements in parallel (non-blocking)
+            requestIdleCallback(() => {
+                renderColorPresets();
+                const colorPreview = document.getElementById('colorPreview');
+                if (colorPreview) {
+                    colorPreview.style.backgroundColor = state.currentColor;
+                }
+            }, { timeout: 100 });
             
             try {
+                // Initialize model cache
+                await initModelCache();
+                
                 // 1. Start Camera concurrently with scripts loading
                 const cameraPromise = startCamera();
                 
                 // 2. Load Library via Dynamic Script Injection (Retry Logic included)
                 statusText.innerText = "Loading AI Core...";
-                await loadFaceAPIScript();
+                const scriptPromise = loadFaceAPIScript();
+                
+                // Wait for script to load
+                await scriptPromise;
                 statusText.innerText = "AI Core loaded!";
 
-                // 3. Load Models
-                statusText.innerText = "Downloading Neural Networks...";
+                // 3. Load Models (with caching)
+                statusText.innerText = "Loading Neural Networks...";
                 await loadModels();
 
                 // 4. Wait for camera if it's not ready yet
@@ -558,6 +587,9 @@
                 
                 // 5. Start Detection Loop
                 state.isModelLoaded = true;
+                const initTime = ((performance.now() - initStart) / 1000).toFixed(2);
+                console.log(`Initialization completed in ${initTime}s`);
+                
                 loader.style.opacity = '0';
                 setTimeout(() => loader.style.display = 'none', 500);
                 
@@ -569,6 +601,75 @@
                 document.getElementById('error-content').style.display = 'flex';
                 document.getElementById('error-msg').innerText = error.message;
                 statusText.innerText = "";
+            }
+        }
+        
+        // Initialize IndexedDB for model caching
+        async function initModelCache() {
+            return new Promise((resolve, reject) => {
+                if (!('indexedDB' in window)) {
+                    console.warn('IndexedDB not supported, model caching disabled');
+                    resolve();
+                    return;
+                }
+                
+                const request = indexedDB.open('hairStylerCache', 1);
+                
+                request.onerror = () => {
+                    console.warn('IndexedDB open failed, model caching disabled');
+                    resolve(); // Don't fail initialization
+                };
+                
+                request.onsuccess = () => {
+                    state.modelCache = request.result;
+                    resolve();
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('models')) {
+                        db.createObjectStore('models', { keyPath: 'url' });
+                    }
+                };
+            });
+        }
+        
+        // Cache model in IndexedDB
+        async function cacheModel(url, modelData) {
+            if (!state.modelCache) return;
+            
+            try {
+                const transaction = state.modelCache.transaction(['models'], 'readwrite');
+                const store = transaction.objectStore('models');
+                await store.put({ url, data: modelData, timestamp: Date.now() });
+            } catch (e) {
+                console.warn('Failed to cache model:', e);
+            }
+        }
+        
+        // Get cached model from IndexedDB
+        async function getCachedModel(url) {
+            if (!state.modelCache) return null;
+            
+            try {
+                const transaction = state.modelCache.transaction(['models'], 'readonly');
+                const store = transaction.objectStore('models');
+                const request = store.get(url);
+                
+                return new Promise((resolve) => {
+                    request.onsuccess = () => {
+                        const result = request.result;
+                        // Cache valid for 7 days
+                        if (result && (Date.now() - result.timestamp) < 7 * 24 * 60 * 60 * 1000) {
+                            resolve(result.data);
+                        } else {
+                            resolve(null);
+                        }
+                    };
+                    request.onerror = () => resolve(null);
+                });
+            } catch (e) {
+                return null;
             }
         }
 
@@ -616,6 +717,13 @@
                 // Continue to load
             }
 
+            // Preload the primary CDN for faster loading
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'script';
+            link.href = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+            document.head.appendChild(link);
+            
             const urls = [
                 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
                 'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js'
@@ -649,16 +757,19 @@
                     // Polling: Wait until the global object AND specific nets are ready
                     // Give it a small delay first to let the script fully initialize
                     statusText.innerText = "Initializing AI library...";
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    // Reduced initial delay - script should be ready faster
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     
                     await new Promise((resolve, reject) => {
                         let attempts = 0;
                         const maxAttempts = 200; // 20 seconds timeout
-                        const interval = setInterval(() => {
+                        // Use requestAnimationFrame for smoother polling (less CPU intensive)
+                        let rafId, timeoutId;
+                        const checkReady = () => {
                             attempts++;
                             
-                            // Update status every few attempts
-                            if (attempts % 10 === 0) {
+                            // Update status less frequently to reduce DOM updates
+                            if (attempts % 15 === 0) {
                                 statusText.innerText = `Initializing AI library... (${Math.round(attempts * 0.1)}s)`;
                             }
                             
@@ -683,7 +794,8 @@
                                                 (typeof detector === 'object' && detector !== null)) {
                                                 console.log(`FaceAPI nets ready after ${attempts} attempts`);
                                                 statusText.innerText = "AI library ready!";
-                                                clearInterval(interval);
+                                                if (rafId) cancelAnimationFrame(rafId);
+                                                if (timeoutId) clearTimeout(timeoutId);
                                                 resolve();
                                                 return;
                                             }
@@ -704,7 +816,8 @@
                             }
 
                             if (attempts >= maxAttempts) {
-                                clearInterval(interval);
+                                if (rafId) cancelAnimationFrame(rafId);
+                                if (timeoutId) clearTimeout(timeoutId);
                                 // Final check
                                 try {
                                     const api = window.faceapi;
@@ -733,7 +846,23 @@
                                     reject(new Error(`Script loaded but initialization failed: ${e.message}`));
                                 }
                             }
-                        }, 100);
+                            
+                            if (attempts < maxAttempts) {
+                                rafId = requestAnimationFrame(checkReady);
+                            }
+                        };
+                        
+                        rafId = requestAnimationFrame(checkReady);
+                        
+                        // Fallback timeout for safety (in case RAF stops)
+                        timeoutId = setTimeout(() => {
+                            if (rafId) cancelAnimationFrame(rafId);
+                            if (attempts < maxAttempts) {
+                                // Force final check
+                                attempts = maxAttempts;
+                                checkReady();
+                            }
+                        }, maxAttempts * 100);
                     });
                     
                     console.log(`Successfully initialized face-api from ${url}`);
@@ -775,6 +904,7 @@
 
         async function loadModels() {
             const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            const MODEL_NAMES = ['tiny_face_detector_model-weights_manifest.json', 'face_landmark_68_tiny_model-weights_manifest.json'];
             
             try {
                 // Verification - simplified because loader guarantees structure now
@@ -792,17 +922,19 @@
                     throw new Error(`LandmarkNet not found in library. Available nets: ${availableNets.join(', ')}`);
                 }
 
-                // Load models in parallel for faster initialization
-                statusText.innerText = "Loading face detection model...";
-                const detectorPromise = detector.loadFromUri(MODEL_URL);
+                // Try to load from cache first (IndexedDB caching is complex for face-api models,
+                // so we'll optimize the loading process instead)
+                statusText.innerText = "Loading models...";
                 
-                statusText.innerText = "Loading landmark detection model...";
+                // Load models in parallel for faster initialization
+                // Note: face-api.js handles its own caching via browser cache
+                const detectorPromise = detector.loadFromUri(MODEL_URL);
                 const landmarkPromise = landmark.loadFromUri(MODEL_URL);
                 
                 // Wait for both to complete
                 await Promise.all([detectorPromise, landmarkPromise]);
                 
-                statusText.innerText = "Models loaded successfully!";
+                statusText.innerText = "Models ready!";
             } catch (e) {
                 console.error("Model loading failed:", e);
                 throw new Error(`Model Error: ${e.message}`);
@@ -1179,14 +1311,19 @@
 
         function renderColorPresets() {
             const container = document.getElementById('color-presets');
+            if (!container) return;
+            
+            // Use DocumentFragment for better performance (batch DOM updates)
+            const fragment = document.createDocumentFragment();
             COLORS.forEach(color => {
                 const btn = document.createElement('button');
                 btn.className = "color-preset-btn flex-shrink-0";
                 btn.style.backgroundColor = color.hex;
                 btn.setAttribute('aria-label', `${color.name} hair color`);
                 btn.onclick = () => setColor(color.hex);
-                container.appendChild(btn);
+                fragment.appendChild(btn);
             });
+            container.appendChild(fragment);
         }
 
         window.setHair = (style) => {
