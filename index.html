@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="AI-powered virtual hair styling with real-time AR preview">
     <meta name="theme-color" content="#9333ea">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%239333ea' width='100' height='100'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white'>✂</text></svg>">
     <title>Virtual Hair Styler AI</title>
+    <!-- Note: Tailwind CDN is used for simplicity. For production, consider using PostCSS plugin -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -571,12 +574,16 @@
         // Robust script loader with fallback
         async function loadFaceAPIScript() {
             // If already loaded from a previous attempt and fully initialized
-            if (window.faceapi && 
-                window.faceapi.nets && 
-                window.faceapi.nets.tinyFaceDetector && 
-                window.faceapi.nets.faceLandmarks68TinyNet) {
-                console.log("FaceAPI already fully loaded");
-                return;
+            try {
+                if (window.faceapi && 
+                    window.faceapi.nets && 
+                    typeof window.faceapi.nets.tinyFaceDetector !== 'undefined' && 
+                    typeof window.faceapi.nets.faceLandmarks68TinyNet !== 'undefined') {
+                    console.log("FaceAPI already fully loaded");
+                    return;
+                }
+            } catch (e) {
+                // Continue to load
             }
 
             const urls = [
@@ -588,33 +595,103 @@
                 try {
                     await new Promise((resolve, reject) => {
                         console.log(`Attempting to load ${url}`);
+                        // Remove any existing face-api script to avoid conflicts
+                        const existingScript = document.querySelector('script[src*="face-api"]');
+                        if (existingScript) {
+                            existingScript.remove();
+                        }
+                        
                         const script = document.createElement('script');
                         script.src = url;
-                        script.crossOrigin = 'anonymous'; // Re-enabled for CORS correctness
-                        script.onload = () => resolve();
-                        script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+                        script.crossOrigin = 'anonymous';
+                        script.async = true;
+                        script.onload = () => {
+                            console.log(`Script loaded: ${url}`);
+                            resolve();
+                        };
+                        script.onerror = () => {
+                            console.error(`Failed to load script: ${url}`);
+                            reject(new Error(`Failed to load script: ${url}`));
+                        };
                         document.head.appendChild(script);
                     });
                     
                     // Polling: Wait until the global object AND specific nets are ready
+                    // Give it a small delay first to let the script fully initialize
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
                     await new Promise((resolve, reject) => {
                         let attempts = 0;
+                        const maxAttempts = 200; // 20 seconds timeout
                         const interval = setInterval(() => {
                             attempts++;
                             
-                            // Check if the library is initialized enough to have BOTH nets we need
-                            // The error "LandmarkNet not found" implies this was resolving too early
-                            const isReady = window.faceapi && 
-                                          window.faceapi.nets && 
-                                          window.faceapi.nets.tinyFaceDetector && 
-                                          window.faceapi.nets.faceLandmarks68TinyNet;
+                            // More robust checking - try accessing the nets object
+                            try {
+                                const api = window.faceapi;
+                                if (api) {
+                                    // Check if faceapi object exists
+                                    if (api.nets) {
+                                        // Check if nets object exists and has the required properties
+                                        // The nets might be objects with loadFromUri methods
+                                        const detector = api.nets.tinyFaceDetector;
+                                        const landmarks = api.nets.faceLandmarks68TinyNet;
+                                        
+                                        // Check if they exist and are not null/undefined
+                                        if (detector !== null && detector !== undefined && 
+                                            landmarks !== null && landmarks !== undefined) {
+                                            // Additional check: see if they have expected methods
+                                            if (typeof detector.loadFromUri === 'function' || 
+                                                typeof detector.load === 'function' ||
+                                                (typeof detector === 'object' && detector !== null)) {
+                                                console.log(`FaceAPI nets ready after ${attempts} attempts`);
+                                                clearInterval(interval);
+                                                resolve();
+                                                return;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Alternative check: verify the structure matches what we'll use
+                                    if (api.TinyFaceDetectorOptions && typeof api.TinyFaceDetectorOptions === 'function') {
+                                        // This is a good sign the library is ready
+                                        // But we still need nets, so continue checking
+                                    }
+                                }
+                            } catch (e) {
+                                // Continue checking
+                                if (attempts % 20 === 0) {
+                                    console.log(`Still waiting for FaceAPI... (attempt ${attempts})`);
+                                }
+                            }
 
-                            if (isReady) {
+                            if (attempts >= maxAttempts) {
                                 clearInterval(interval);
-                                resolve();
-                            } else if (attempts > 150) { // 15 seconds timeout per source
-                                clearInterval(interval);
-                                reject(new Error("Script loaded but initialization timed out (nets missing)"));
+                                // Final check
+                                try {
+                                    const api = window.faceapi;
+                                    if (api && api.nets) {
+                                        const detector = api.nets.tinyFaceDetector;
+                                        const landmarks = api.nets.faceLandmarks68TinyNet;
+                                        if (detector && landmarks) {
+                                            console.log("FaceAPI ready on final check");
+                                            resolve();
+                                        } else {
+                                            console.error("FaceAPI nets missing:", {
+                                                hasApi: !!api,
+                                                hasNets: !!api.nets,
+                                                hasDetector: !!detector,
+                                                hasLandmarks: !!landmarks,
+                                                netsKeys: api.nets ? Object.keys(api.nets) : []
+                                            });
+                                            reject(new Error("Script loaded but initialization timed out (nets missing)"));
+                                        }
+                                    } else {
+                                        reject(new Error("Script loaded but faceapi object not found"));
+                                    }
+                                } catch (e) {
+                                    reject(new Error(`Script loaded but initialization failed: ${e.message}`));
+                                }
                             }
                         }, 100);
                     });
