@@ -25,6 +25,17 @@
     
     <!-- Performance: Load Tailwind early (critical for initial render) -->
     <!-- Note: Tailwind CDN is used for simplicity. For production, consider using PostCSS plugin -->
+    <!-- Note: CDN is for development. For production, build Tailwind CSS separately -->
+    <script>
+        // Suppress Tailwind CDN warning in console
+        const originalWarn = console.warn;
+        console.warn = function(...args) {
+            if (args[0] && args[0].includes && args[0].includes('cdn.tailwindcss.com')) {
+                return; // Suppress Tailwind CDN warning
+            }
+            originalWarn.apply(console, args);
+        };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Performance: Defer Font Awesome (non-critical for initial render) -->
@@ -677,28 +688,53 @@
         function findLandmarkNet(api) {
             if (!api || !api.nets) return null;
             
-            // Try the expected name first
-            if (api.nets.faceLandmarks68TinyNet) {
-                return api.nets.faceLandmarks68TinyNet;
+            // Log all available nets for debugging (only once)
+            if (!findLandmarkNet._loggedNets) {
+                const allNets = Object.keys(api.nets);
+                console.log('Available face-api.js nets:', allNets);
+                findLandmarkNet._loggedNets = true;
             }
             
-            // Try alternative names
-            const altNames = [
-                'faceLandmark68TinyNet',  // singular
-                'faceLandmarks68Net',     // without Tiny
-                'faceLandmark68Net',      // singular without Tiny
-                'faceLandmarks68'         // shorter
+            // Try common names in order of likelihood
+            // face-api.js v0.22.2 uses faceLandmark68TinyNet (singular Landmark, with Tiny)
+            const nameVariations = [
+                'faceLandmark68TinyNet',      // Most likely: singular, with Tiny
+                'faceLandmarks68TinyNet',     // Plural version
+                'faceLandmark68Net',          // Without Tiny
+                'faceLandmarks68Net',         // Plural, without Tiny
+                'faceLandmarks68',            // Shorter
+                'FaceLandmark68TinyNet',      // Capitalized
+                'FaceLandmarks68TinyNet',     // Capitalized plural
             ];
             
-            for (const name of altNames) {
-                if (api.nets[name]) {
-                    // Create alias for consistency
-                    api.nets.faceLandmarks68TinyNet = api.nets[name];
-                    console.log(`Using landmark net: ${name}`);
-                    return api.nets[name];
+            for (const name of nameVariations) {
+                const net = api.nets[name];
+                if (net !== null && net !== undefined && typeof net === 'object') {
+                    // Create alias for consistency with our code
+                    if (!api.nets.faceLandmarks68TinyNet) {
+                        api.nets.faceLandmarks68TinyNet = net;
+                    }
+                    console.log(`✓ Using landmark net: ${name}`);
+                    return net;
                 }
             }
             
+            // Last resort: search all nets for any with "landmark" and ("68" or "tiny")
+            const allNets = Object.keys(api.nets);
+            for (const netName of allNets) {
+                const lowerName = netName.toLowerCase();
+                if (lowerName.includes('landmark') && 
+                    (lowerName.includes('68') || lowerName.includes('tiny'))) {
+                    const net = api.nets[netName];
+                    if (net !== null && net !== undefined) {
+                        console.log(`✓ Found landmark net by search: ${netName}`);
+                        api.nets.faceLandmarks68TinyNet = net;
+                        return net;
+                    }
+                }
+            }
+            
+            console.error('Could not find landmark net. Available nets:', allNets);
             return null;
         }
 
@@ -757,8 +793,8 @@
                     // Polling: Wait until the global object AND specific nets are ready
                     // Give it a small delay first to let the script fully initialize
                     statusText.innerText = "Initializing AI library...";
-                    // Reduced initial delay - script should be ready faster
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Initial delay to let face-api.js fully initialize its nets
+                    await new Promise(resolve => setTimeout(resolve, 300));
                     
                     await new Promise((resolve, reject) => {
                         let attempts = 0;
@@ -785,14 +821,15 @@
                                         const landmarks = findLandmarkNet(api);
                                         
                                         // Check if they exist and are not null/undefined
+                                        // In face-api.js v0.22.2, nets are objects (not necessarily functions)
+                                        // They just need to exist and have a loadFromUri method when needed
                                         if (detector !== null && detector !== undefined && 
                                             landmarks !== null && landmarks !== undefined) {
-                                            // Additional check: see if they have expected methods
-                                            // In face-api.js, nets are objects that have loadFromUri method
-                                            if (typeof detector.loadFromUri === 'function' || 
-                                                typeof detector.load === 'function' ||
-                                                (typeof detector === 'object' && detector !== null)) {
-                                                console.log(`FaceAPI nets ready after ${attempts} attempts`);
+                                            // Additional check: see if they are valid objects
+                                            // The loadFromUri might be available after the net object exists
+                                            if ((typeof detector === 'object' && detector !== null) &&
+                                                (typeof landmarks === 'object' && landmarks !== null)) {
+                                                console.log(`✓ FaceAPI nets ready after ${attempts} attempts`);
                                                 statusText.innerText = "AI library ready!";
                                                 if (rafId) cancelAnimationFrame(rafId);
                                                 if (timeoutId) clearTimeout(timeoutId);
@@ -837,7 +874,26 @@
                                                 hasLandmarks: !!landmarks,
                                                 netsKeys: availableNets
                                             });
-                                            reject(new Error(`Script loaded but landmark net not found. Available nets: ${availableNets.join(', ')}`));
+                                            
+                                            // Try to find ANY landmark net as last resort
+                                            let foundNet = null;
+                                            for (const netName of availableNets) {
+                                                const lowerName = netName.toLowerCase();
+                                                if ((lowerName.includes('landmark') && lowerName.includes('68')) ||
+                                                    (lowerName.includes('landmark') && lowerName.includes('tiny'))) {
+                                                    foundNet = api.nets[netName];
+                                                    console.log(`Found potential landmark net: ${netName}`);
+                                                    break;
+                                                }
+                                            }
+                                            
+                                            if (foundNet) {
+                                                console.log("Using found landmark net as fallback");
+                                                api.nets.faceLandmarks68TinyNet = foundNet;
+                                                resolve();
+                                            } else {
+                                                reject(new Error(`Script loaded but landmark net not found. Available nets: ${availableNets.join(', ')}`));
+                                            }
                                         }
                                     } else {
                                         reject(new Error("Script loaded but faceapi object not found"));
@@ -1145,9 +1201,9 @@
             
             // Convert hex color to RGB for realistic shading
             const hex = color.replace('#', '');
-            const r = parseInt(hex.substr(0, 2), 16);
-            const g = parseInt(hex.substr(2, 2), 16);
-            const b = parseInt(hex.substr(4, 2), 16);
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
             
             // Create gradient for realistic hair depth
             const gradient = {
