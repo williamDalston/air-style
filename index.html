@@ -547,6 +547,7 @@
                 // 2. Load Library via Dynamic Script Injection (Retry Logic included)
                 statusText.innerText = "Loading AI Core...";
                 await loadFaceAPIScript();
+                statusText.innerText = "AI Core loaded!";
 
                 // 3. Load Models
                 statusText.innerText = "Downloading Neural Networks...";
@@ -571,14 +572,43 @@
             }
         }
 
+        // Helper function to find the correct landmark net name
+        function findLandmarkNet(api) {
+            if (!api || !api.nets) return null;
+            
+            // Try the expected name first
+            if (api.nets.faceLandmarks68TinyNet) {
+                return api.nets.faceLandmarks68TinyNet;
+            }
+            
+            // Try alternative names
+            const altNames = [
+                'faceLandmark68TinyNet',  // singular
+                'faceLandmarks68Net',     // without Tiny
+                'faceLandmark68Net',      // singular without Tiny
+                'faceLandmarks68'         // shorter
+            ];
+            
+            for (const name of altNames) {
+                if (api.nets[name]) {
+                    // Create alias for consistency
+                    api.nets.faceLandmarks68TinyNet = api.nets[name];
+                    console.log(`Using landmark net: ${name}`);
+                    return api.nets[name];
+                }
+            }
+            
+            return null;
+        }
+
         // Robust script loader with fallback
         async function loadFaceAPIScript() {
             // If already loaded from a previous attempt and fully initialized
             try {
-                if (window.faceapi && 
-                    window.faceapi.nets && 
-                    typeof window.faceapi.nets.tinyFaceDetector !== 'undefined' && 
-                    typeof window.faceapi.nets.faceLandmarks68TinyNet !== 'undefined') {
+                const api = window.faceapi;
+                if (api && api.nets && 
+                    typeof api.nets.tinyFaceDetector !== 'undefined' && 
+                    findLandmarkNet(api)) {
                     console.log("FaceAPI already fully loaded");
                     return;
                 }
@@ -618,6 +648,7 @@
                     
                     // Polling: Wait until the global object AND specific nets are ready
                     // Give it a small delay first to let the script fully initialize
+                    statusText.innerText = "Initializing AI library...";
                     await new Promise(resolve => setTimeout(resolve, 200));
                     
                     await new Promise((resolve, reject) => {
@@ -625,6 +656,11 @@
                         const maxAttempts = 200; // 20 seconds timeout
                         const interval = setInterval(() => {
                             attempts++;
+                            
+                            // Update status every few attempts
+                            if (attempts % 10 === 0) {
+                                statusText.innerText = `Initializing AI library... (${Math.round(attempts * 0.1)}s)`;
+                            }
                             
                             // More robust checking - try accessing the nets object
                             try {
@@ -635,19 +671,43 @@
                                         // Check if nets object exists and has the required properties
                                         // The nets might be objects with loadFromUri methods
                                         const detector = api.nets.tinyFaceDetector;
-                                        const landmarks = api.nets.faceLandmarks68TinyNet;
+                                        const landmarks = findLandmarkNet(api);
                                         
                                         // Check if they exist and are not null/undefined
-                                        if (detector !== null && detector !== undefined && 
-                                            landmarks !== null && landmarks !== undefined) {
-                                            // Additional check: see if they have expected methods
-                                            if (typeof detector.loadFromUri === 'function' || 
-                                                typeof detector.load === 'function' ||
-                                                (typeof detector === 'object' && detector !== null)) {
-                                                console.log(`FaceAPI nets ready after ${attempts} attempts`);
-                                                clearInterval(interval);
-                                                resolve();
-                                                return;
+                                        if (detector !== null && detector !== undefined) {
+                                            // Check for landmarks - try multiple possible names
+                                            let landmarksFound = landmarks;
+                                            if (!landmarksFound) {
+                                                // Try alternative names
+                                                const altNames = [
+                                                    'faceLandmark68TinyNet',
+                                                    'faceLandmarks68Net',
+                                                    'faceLandmark68Net',
+                                                    'faceLandmarks68'
+                                                ];
+                                                for (const altName of altNames) {
+                                                    if (api.nets[altName]) {
+                                                        landmarksFound = api.nets[altName];
+                                                        // Create alias for consistency
+                                                        api.nets.faceLandmarks68TinyNet = landmarksFound;
+                                                        console.log(`Using alternative landmark net: ${altName}`);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            
+                                            if (landmarksFound !== null && landmarksFound !== undefined) {
+                                                // Additional check: see if they have expected methods
+                                                // In face-api.js, nets are objects that have loadFromUri method
+                                                if (typeof detector.loadFromUri === 'function' || 
+                                                    typeof detector.load === 'function' ||
+                                                    (typeof detector === 'object' && detector !== null)) {
+                                                    console.log(`FaceAPI nets ready after ${attempts} attempts`);
+                                                    statusText.innerText = "AI library ready!";
+                                                    clearInterval(interval);
+                                                    resolve();
+                                                    return;
+                                                }
                                             }
                                         }
                                     }
@@ -672,19 +732,21 @@
                                     const api = window.faceapi;
                                     if (api && api.nets) {
                                         const detector = api.nets.tinyFaceDetector;
-                                        const landmarks = api.nets.faceLandmarks68TinyNet;
+                                        const landmarks = findLandmarkNet(api);
                                         if (detector && landmarks) {
                                             console.log("FaceAPI ready on final check");
                                             resolve();
                                         } else {
+                                            // Log available nets to help debug
+                                            const availableNets = api.nets ? Object.keys(api.nets) : [];
                                             console.error("FaceAPI nets missing:", {
                                                 hasApi: !!api,
                                                 hasNets: !!api.nets,
                                                 hasDetector: !!detector,
                                                 hasLandmarks: !!landmarks,
-                                                netsKeys: api.nets ? Object.keys(api.nets) : []
+                                                netsKeys: availableNets
                                             });
-                                            reject(new Error("Script loaded but initialization timed out (nets missing)"));
+                                            reject(new Error(`Script loaded but landmark net not found. Available nets: ${availableNets.join(', ')}`));
                                         }
                                     } else {
                                         reject(new Error("Script loaded but faceapi object not found"));
@@ -743,11 +805,14 @@
                 
                 // Safe access to models
                 const detector = api.nets.tinyFaceDetector;
-                const landmark = api.nets.faceLandmarks68TinyNet;
+                const landmark = findLandmarkNet(api);
 
                 // Double check to fail gracefully
                 if (!detector) throw new Error("TinyFaceDetector not found in library");
-                if (!landmark) throw new Error("LandmarkNet not found in library");
+                if (!landmark) {
+                    const availableNets = Object.keys(api.nets || {});
+                    throw new Error(`LandmarkNet not found in library. Available nets: ${availableNets.join(', ')}`);
+                }
 
                 // Load models in parallel for faster initialization
                 statusText.innerText = "Loading face detection model...";
